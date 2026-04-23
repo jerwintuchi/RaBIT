@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+coverage
+playwright-report
+src-tauri/target
+src-tauri/gen
+pnpm-lock.yaml
+Cargo.lock
+*.md

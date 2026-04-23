@@ -1,0 +1,48 @@
+[package]
+name = "rabit"
+version = "0.1.0"
+description = "Professional-grade desktop pixel art and sprite animation editor"
+authors = ["RaBIT contributors"]
+edition = "2021"
+rust-version = "1.77"
+
+# The application is built as both a lib (for mobile targets and cleaner testability)
+# and a bin that just delegates to the lib — this is the Tauri 2 convention.
+[lib]
+name = "rabit_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "rabit"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = [] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Added as their owning milestones arrive:
+# M5:  rayon (flood fill)
+# M9:  rmp-serde, zstd
+# M10: (uses existing serde_json for the autosave manifest)
+# M11: image, png, gif, color_quant (NOT gifski — AGPL, see stack.md §3.5)
+
+[dev-dependencies]
+proptest = "1.4"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"    # optimize for size; RaBIT is I/O + GPU bound, not CPU bound
+panic = "abort"
+strip = true
+
+[profile.dev]
+incremental = true

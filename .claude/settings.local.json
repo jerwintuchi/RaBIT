@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm --version)",
+      "Bash(rustc --version)",
+      "Bash(cargo --version)",
+      "Bash(cargo tauri *)",
+      "PowerShell(Get-Command node, pnpm, npm, rustc, cargo, tauri -ErrorAction SilentlyContinue)"
+    ]
+  }
+}

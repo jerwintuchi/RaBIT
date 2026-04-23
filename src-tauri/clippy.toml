@@ -1,0 +1,3 @@
+# Extra strictness — if this becomes noisy in practice we'll revisit.
+avoid-breaking-exported-api = false
+msrv = "1.77"

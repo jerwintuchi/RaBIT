@@ -1,0 +1,33 @@
+/*
+ * Design tokens — M0 minimal stub.
+ * Full token set (all 30+ CSS custom properties) lands in M1 per docs/design-system.md §3.
+ * Only the tokens used by the M0 scaffold shell are defined here.
+ */
+
+:root {
+  /* Background scale (partial — full scale in M1) */
+  --bg-0: #141414;
+  --bg-1: #1c1c1c;
+  --bg-2: #242424;
+
+  /* Text (partial) */
+  --text-primary: #e8e8e8;
+  --text-secondary: #9a9a9a;
+
+  /* Accent (partial) */
+  --accent-primary: #4b8ef0;
+
+  /* Typography */
+  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', monospace;
+
+  /* Baseline font size (full scale in M1) */
+  --text-sm: 12px;
+  --text-md: 13px;
+
+  /* Spacing (full scale in M1) */
+  --space-2: 8px;
+  --space-4: 16px;
+
+  color-scheme: dark;
+}
