@@ -1,12 +1,29 @@
 # Dependencies
 node_modules/
 .pnpm-store/
+.npm/
+.yarn/
+
+# Lockfiles for wrong package managers (we use pnpm exclusively per docs/stack.md)
+package-lock.json
+yarn.lock
+bun.lockb
 
 # Build outputs
 dist/
 dist-ssr/
 build/
 *.local
+*.tsbuildinfo
+
+# Tool caches
+.vite/
+.vitest-cache/
+.eslintcache
+.turbo/
+
+# Documentations
+.rabit-memory/*
 
 # Editor directories and files
 .vscode/*
@@ -15,13 +32,25 @@ build/
 !.vscode/launch.json
 !.vscode/tasks.json
 .idea/
-.DS_Store
+.fleet/
+.zed/
+.history/
+*.iml
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# OS-specific artifacts
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
 Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
 # Logs
 logs/
@@ -37,6 +66,7 @@ coverage/
 *.lcov
 .nyc_output/
 playwright-report/
+blob-report/
 test-results/
 
 # Environment
@@ -45,13 +75,20 @@ test-results/
 .env.*.local
 
 # Rust / Tauri
+# Note: src-tauri/Cargo.lock IS tracked — RaBIT is a binary/application, and
+# Cargo convention is to commit the lockfile for reproducible builds.
 src-tauri/target/
-src-tauri/Cargo.lock
-src-tauri/gen/schemas/
+src-tauri/gen/
 src-tauri/WixTools/
+*.rs.bk
 
-# Platform files
+# Platform installer outputs
 *.exe
+*.msi
 *.dmg
 *.deb
 *.AppImage
+
+# Backup files
+*.bak
+*.orig
