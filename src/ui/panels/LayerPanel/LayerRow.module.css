@@ -1,0 +1,72 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 32px;
+  padding: 0 var(--space-2);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  user-select: none;
+}
+
+.row:hover {
+  background: var(--bg-2);
+}
+
+.active {
+  background: var(--accent-muted);
+}
+
+.active:hover {
+  background: var(--accent-muted);
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.iconButton:hover {
+  color: var(--text-primary);
+  background: var(--bg-3);
+}
+
+.iconButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.locked {
+  color: var(--accent-warning, var(--accent-primary));
+}
+
+.name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.nameInput {
+  flex: 1;
+  height: 22px;
+  padding: 0 var(--space-1);
+  background: var(--bg-0);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-sm);
+  outline: none;
+}

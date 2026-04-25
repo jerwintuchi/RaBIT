@@ -12,7 +12,7 @@ type: project
 | 4 | Technical Stack Decision | ✅ Complete | docs/stack.md |
 | 5 | Data Model + File Format | ✅ Complete | docs/data-model.md |
 | 6 | Core Implementation Plan | ✅ Complete | docs/milestones.md |
-| 7 | Implementation (M5 in progress — remaining MVP tools, Fill deferred) | 🔨 Active | src/ |
+| 7 | Implementation (M6 in progress — Layer panel Phase A landed) | 🔨 Active | src/ |
 | 8 | Optimization + Refactoring | ⏳ Pending | — |
 
 **Why:** Full product lifecycle approach — no phase skipped.

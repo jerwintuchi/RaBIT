@@ -7,3 +7,5 @@ export {
 } from './frame-navigation';
 
 export { initNewProject } from './project-init';
+
+export * as layerActions from './layer-actions';

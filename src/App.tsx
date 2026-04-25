@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, lazy, Suspense } from 'react';
 import { CanvasViewport } from './ui/canvas';
 import { ToolBar } from './ui/toolbar';
+import { LayerPanel } from './ui/panels';
 import { seedTestFixture } from './ui/canvas/testFixture';
 import { useLayerStore } from './state/useLayerStore';
 import { useHistoryStore } from './state/useHistoryStore';
@@ -81,7 +82,7 @@ export function App(): JSX.Element {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '48px 1fr',
+        gridTemplateColumns: '48px 1fr 240px',
         width: '100vw',
         height: '100vh',
         background: 'var(--bg-0)',
@@ -90,6 +91,7 @@ export function App(): JSX.Element {
     >
       <ToolBar />
       <CanvasViewport />
+      <LayerPanel />
     </div>
   );
 }
