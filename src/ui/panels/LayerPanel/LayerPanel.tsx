@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { BlendMode } from '../../../state/dataModelTypes';
 import { useLayerStore } from '../../../state/useLayerStore';
 import { layerActions } from '../../../state/action-composers';
@@ -24,8 +24,49 @@ export function LayerPanel(): JSX.Element {
     [layers, activeLayerId],
   );
 
-  // Display order: top of list = top of stack visually = end of array
+  // Display order is reverse of array order — top of UI = top of stack = end of array
   const displayLayers = useMemo(() => [...layers].reverse(), [layers]);
+
+  // Drag-to-reorder state (display indices)
+  const [dragSrc, setDragSrc] = useState<number | null>(null);
+  const [dropInfo, setDropInfo] = useState<{ idx: number; topHalf: boolean } | null>(null);
+
+  const onRowDragStart = (displayIdx: number) => {
+    setDragSrc(displayIdx);
+  };
+
+  const onRowDragOver = (e: React.DragEvent<HTMLElement>, displayIdx: number) => {
+    if (dragSrc === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = e.currentTarget.getBoundingClientRect();
+    const topHalf = e.clientY < rect.top + rect.height / 2;
+    setDropInfo((prev) =>
+      prev?.idx === displayIdx && prev.topHalf === topHalf ? prev : { idx: displayIdx, topHalf },
+    );
+  };
+
+  const onDragEnd = () => {
+    setDragSrc(null);
+    setDropInfo(null);
+  };
+
+  const onDrop = () => {
+    if (dragSrc === null || dropInfo === null) {
+      onDragEnd();
+      return;
+    }
+    // Compute the target display "slot" — where the dragged row will land
+    let slot = dropInfo.topHalf ? dropInfo.idx : dropInfo.idx + 1;
+    // Account for the source's removal: slots after the source shift up by 1
+    if (slot > dragSrc) slot -= 1;
+    if (slot !== dragSrc) {
+      const fromArr = layers.length - 1 - dragSrc;
+      const toArr = layers.length - 1 - slot;
+      layerActions.reorderLayer(fromArr, toArr);
+    }
+    onDragEnd();
+  };
 
   const onDelete = () => {
     if (activeLayerId) layerActions.removeLayer(activeLayerId);
@@ -61,12 +102,20 @@ export function LayerPanel(): JSX.Element {
       </div>
 
       <div className={styles.list} role="listbox" aria-label="Layers">
-        {displayLayers.map((layer) => (
+        {displayLayers.map((layer, displayIdx) => (
           <LayerRow
             key={layer.id}
             layer={layer}
             active={layer.id === activeLayerId}
+            displayIdx={displayIdx}
+            draggingDisplayIdx={dragSrc}
+            dropDisplayIdx={dropInfo?.idx ?? null}
+            dropOnTopHalf={dropInfo?.topHalf ?? false}
             onSelect={() => useLayerStore.getState().setActiveLayer(layer.id)}
+            onDragStart={onRowDragStart}
+            onDragOver={onRowDragOver}
+            onDrop={onDrop}
+            onDragEnd={onDragEnd}
           />
         ))}
       </div>

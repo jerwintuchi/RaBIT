@@ -7,10 +7,30 @@ import styles from './LayerRow.module.css';
 interface LayerRowProps {
   layer: Layer;
   active: boolean;
+  displayIdx: number;
+  draggingDisplayIdx: number | null;
+  dropDisplayIdx: number | null;
+  dropOnTopHalf: boolean;
   onSelect: () => void;
+  onDragStart: (displayIdx: number) => void;
+  onDragOver: (e: React.DragEvent<HTMLElement>, displayIdx: number) => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
 }
 
-export function LayerRow({ layer, active, onSelect }: LayerRowProps): JSX.Element {
+export function LayerRow({
+  layer,
+  active,
+  displayIdx,
+  draggingDisplayIdx,
+  dropDisplayIdx,
+  dropOnTopHalf,
+  onSelect,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+}: LayerRowProps): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(layer.name);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,12 +67,37 @@ export function LayerRow({ layer, active, onSelect }: LayerRowProps): JSX.Elemen
     }
   };
 
+  const isDraggingThis = draggingDisplayIdx === displayIdx;
+  const showTopIndicator = dropDisplayIdx === displayIdx && dropOnTopHalf;
+  const showBottomIndicator = dropDisplayIdx === displayIdx && !dropOnTopHalf;
+
   return (
     <div
-      className={`${styles.row} ${active ? styles.active : ''}`}
-      onClick={onSelect}
+      className={[
+        styles.row,
+        active ? styles.active : '',
+        isDraggingThis ? styles.dragging : '',
+        showTopIndicator ? styles.dropTop : '',
+        showBottomIndicator ? styles.dropBottom : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       role="option"
       aria-selected={active}
+      draggable={!editing}
+      onClick={onSelect}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        // Required by Firefox so the drag actually starts
+        e.dataTransfer.setData('text/plain', layer.id);
+        onDragStart(displayIdx);
+      }}
+      onDragOver={(e) => onDragOver(e, displayIdx)}
+      onDrop={(e) => {
+        e.preventDefault();
+        onDrop();
+      }}
+      onDragEnd={onDragEnd}
     >
       <button
         type="button"

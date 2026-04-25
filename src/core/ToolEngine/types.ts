@@ -32,6 +32,8 @@ export interface CanvasPointerEvent {
 /** Side-effects available to tools — provided by the state-layer bridge. */
 export interface ToolEngineContext {
   getActiveLayerId(): LayerId | null;
+  /** True when the active layer is locked — tools should refuse to mutate it. */
+  isActiveLayerLocked(): boolean;
   /** Returns the active frame's resolved pixel buffer for a layer (or null). */
   getLayerData(layerId: LayerId): Uint8ClampedArray | null;
   getCanvasSize(): { width: number; height: number };

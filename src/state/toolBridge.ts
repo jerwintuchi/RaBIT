@@ -40,6 +40,10 @@ let _toolEngine: ToolEngine | null = null;
 function buildContext(): ToolEngineContext {
   return {
     getActiveLayerId: () => useLayerStore.getState().activeLayerId,
+    isActiveLayerLocked: () => {
+      const { layers, activeLayerId } = useLayerStore.getState();
+      return layers.find((l) => l.id === activeLayerId)?.locked === true;
+    },
     getLayerData: (layerId) => {
       const { frames, activeFrameIndex } = useFrameStore.getState();
       return resolveCell(frames, activeFrameIndex, layerId);

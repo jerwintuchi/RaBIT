@@ -41,6 +41,7 @@ export abstract class BrushTool implements Tool {
 
   onPointerDown(e: CanvasPointerEvent): void {
     if (e.button !== 0) return;
+    if (this.ctx.isActiveLayerLocked()) return;
     const layerId = this.ctx.getActiveLayerId();
     if (!layerId) return;
     const layerBuf = this.ctx.getLayerData(layerId);
