@@ -64,6 +64,8 @@ function buildContext(): ToolEngineContext {
     notifyLayerChanged: (layerId, data) => {
       uploadLayerData(layerId, data);
       getEngine()?.markDirty(DirtyFlag.LAYER_DATA);
+      // Signal subscribers (e.g. thumbnails) that this layer's pixels changed
+      useLayerStore.getState().bumpDataVersion(layerId);
     },
     zoomToward: (cx, cy, direction) => {
       const ui = useUIStore.getState();

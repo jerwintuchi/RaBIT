@@ -6,6 +6,10 @@ import { makeLayer } from '../core/DataModel';
 interface LayerState {
   layers: Layer[];
   activeLayerId: LayerId | null;
+  /** Per-layer counter — bumped whenever a layer's pixel buffer is mutated.
+   *  Zustand subscribers (e.g. layer thumbnails) react to changes here, since
+   *  pixel mutations bypass Immer for performance. */
+  dataVersions: Record<LayerId, number>;
 
   setLayers(layers: Layer[]): void;
   setActiveLayer(id: LayerId | null): void;
@@ -17,12 +21,14 @@ interface LayerState {
   setLocked(id: LayerId, locked: boolean): void;
   setOpacity(id: LayerId, opacity: number): void;
   setBlendMode(id: LayerId, blendMode: BlendMode): void;
+  bumpDataVersion(id: LayerId): void;
 }
 
 export const useLayerStore = create<LayerState>()(
   immer((set, get) => ({
     layers: [],
     activeLayerId: null,
+    dataVersions: {},
 
     setLayers(layers) {
       set((s) => {
@@ -98,6 +104,12 @@ export const useLayerStore = create<LayerState>()(
       set((s) => {
         const l = s.layers.find((x) => x.id === id);
         if (l) l.blendMode = blendMode;
+      });
+    },
+
+    bumpDataVersion(id) {
+      set((s) => {
+        s.dataVersions[id] = (s.dataVersions[id] ?? 0) + 1;
       });
     },
   })),

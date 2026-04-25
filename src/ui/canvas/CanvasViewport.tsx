@@ -24,10 +24,12 @@ export function CanvasViewport(): JSX.Element {
   const glCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const { canvas } = useProjectStore();
-  const { layers } = useLayerStore();
+  const { layers, activeLayerId } = useLayerStore();
   const { frames, activeFrameIndex } = useFrameStore();
   const { zoomLevel, panOffset, showGrid, showCheckerboard, cursorPosition } = useUIStore();
   const activeTool = useToolStore((s) => s.activeTool);
+  const activeLayerLocked =
+    layers.find((l) => l.id === activeLayerId)?.locked === true;
 
   // Pan/zoom interaction — also returns a ref that's true while pan is claiming input
   const { inputClaimedRef } = useViewportInteraction(containerRef, canvas.width, canvas.height);
@@ -110,10 +112,16 @@ export function CanvasViewport(): JSX.Element {
     getEngine()?.setShowCheckerboard(showCheckerboard);
   }, [showCheckerboard]);
 
-  // Push active tool changes (engine + cursor)
+  // Push active tool changes to the engine
   useEffect(() => {
     setActiveTool(activeTool);
-    const cursorMap: Record<string, string> = {
+  }, [activeTool]);
+
+  // Cursor — depends on active tool AND whether the active layer is locked.
+  // Brush-style tools show 'not-allowed' over a locked layer to signal that
+  // clicks won't paint.
+  useEffect(() => {
+    const baseCursor: Record<string, string> = {
       pencil: 'crosshair',
       eraser: 'crosshair',
       line: 'crosshair',
@@ -121,10 +129,13 @@ export function CanvasViewport(): JSX.Element {
       hand: 'grab',
       zoom: 'zoom-in',
     };
+    const blockedByLock =
+      activeLayerLocked && (activeTool === 'pencil' || activeTool === 'eraser' || activeTool === 'line');
+    const cursor = blockedByLock ? 'not-allowed' : (baseCursor[activeTool] ?? 'default');
     if (containerRef.current) {
-      containerRef.current.style.cursor = cursorMap[activeTool] ?? 'default';
+      containerRef.current.style.cursor = cursor;
     }
-  }, [activeTool]);
+  }, [activeTool, activeLayerLocked]);
 
   // Tool pointer event routing — runs in addition to useViewportInteraction's pan handlers
   useEffect(() => {

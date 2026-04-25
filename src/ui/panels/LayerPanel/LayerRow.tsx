@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Layer } from '../../../state/dataModelTypes';
 import { layerActions } from '../../../state/action-composers';
 import { IconEye, IconEyeOff, IconLock } from '../../../assets/icons';
+import { LayerThumbnail } from './LayerThumbnail';
 import styles from './LayerRow.module.css';
 
 interface LayerRowProps {
@@ -123,6 +124,7 @@ export function LayerRow({
       >
         <IconLock />
       </button>
+      <LayerThumbnail layerId={layer.id} />
       {editing ? (
         <input
           ref={inputRef}

@@ -1,0 +1,17 @@
+.thumbnail {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  background:
+    linear-gradient(45deg, var(--bg-3) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--bg-3) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--bg-3) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--bg-3) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: 2px;
+  /* Make the canvas itself render its pixels crisply */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
