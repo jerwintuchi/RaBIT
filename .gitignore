@@ -25,6 +25,16 @@ build/
 # Documentations
 .rabit-memory/*
 
+# Branding / logo assets — not source code, regenerate from design files
+src/assets/branding/
+docs/brand/
+
+# Generated Tauri icon source (the derived platform icons in src-tauri/icons/ are tracked)
+src-tauri/icons/source.png
+
+# Claude Code tool settings (personal / machine-specific)
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/settings.json

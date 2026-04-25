@@ -1,0 +1,47 @@
+.toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  width: 48px;
+  height: 100%;
+  padding: var(--space-2) 0;
+  background: var(--bg-1);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.toolButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 80ms, color 80ms, border-color 80ms;
+}
+
+.toolButton:hover {
+  background: var(--bg-2);
+  color: var(--text-primary);
+}
+
+.toolButton:focus-visible {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.active {
+  background: var(--bg-3);
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.toolButton svg {
+  width: 18px;
+  height: 18px;
+}

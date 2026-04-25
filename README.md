@@ -16,7 +16,7 @@ RaBIT requires a working Rust + Node toolchain plus Tauri 2's platform-specific 
 2. **[Rust](https://rustup.rs)** — run `rustup-init.exe`. Accept defaults. Installs `cargo`, `rustc`, `rustup`.
 3. **WebView2 runtime** — pre-installed on Windows 10 (1803+) and 11. Otherwise install the evergreen runtime from Microsoft.
 4. **Node 20 LTS or newer** — from [nodejs.org](https://nodejs.org).
-5. **pnpm** — `corepack enable pnpm` (ships with Node 16+).
+5. **pnpm** — `npm install -g pnpm`. (Corepack is the "official" route, but hits signature-verification errors on some Node 20.16 installs — `Cannot find matching keyid`. The npm global install is the reliable path on Windows.)
 
 ### macOS
 

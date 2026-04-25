@@ -44,7 +44,7 @@ const nonUiLayers = ['src/core/**/*.{ts,tsx}', 'src/state/**/*.{ts,tsx}', 'src/r
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'src-tauri/**', '*.config.{js,ts}', 'coverage/**', 'playwright-report/**'],
+    ignores: ['dist/**', 'node_modules/**', 'src-tauri/**', '*.config.{js,ts}', 'coverage/**', 'playwright-report/**', 'scripts/**'],
   },
 
   js.configs.recommended,
