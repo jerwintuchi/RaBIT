@@ -9,3 +9,5 @@ export {
 export { initNewProject } from './project-init';
 
 export * as layerActions from './layer-actions';
+
+export * as paletteActions from './palette-actions';

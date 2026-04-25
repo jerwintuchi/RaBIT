@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, lazy, Suspense } from 'react';
 import { CanvasViewport } from './ui/canvas';
 import { ToolBar } from './ui/toolbar';
-import { LayerPanel, ColorPickerPanel } from './ui/panels';
+import { LayerPanel, ColorPickerPanel, PalettePanel } from './ui/panels';
 import { seedTestFixture } from './ui/canvas/testFixture';
 import { useLayerStore } from './state/useLayerStore';
 import { useHistoryStore } from './state/useHistoryStore';
@@ -112,6 +112,9 @@ export function App(): JSX.Element {
         }}
       >
         <ColorPickerPanel />
+        <div style={{ maxHeight: '40%', display: 'flex', minHeight: 0 }}>
+          <PalettePanel />
+        </div>
         <div style={{ flex: 1, minHeight: 0 }}>
           <LayerPanel />
         </div>
