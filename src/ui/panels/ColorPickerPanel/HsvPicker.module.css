@@ -1,0 +1,121 @@
+.hsv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  align-items: center;
+}
+
+/* SV square — saturation L→R, value B→T over a full-saturation hue base */
+.svSquare {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  cursor: crosshair;
+  background:
+    linear-gradient(to top, #000, transparent),
+    linear-gradient(to right, #fff, transparent),
+    var(--hue-color, #f00);
+  touch-action: none;
+}
+
+.svMarker {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+/* Hue bar */
+.hueBar {
+  position: relative;
+  width: 160px;
+  height: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  cursor: ew-resize;
+  background: linear-gradient(
+    to right,
+    #f00 0%,
+    #ff0 17%,
+    #0f0 33%,
+    #0ff 50%,
+    #00f 67%,
+    #f0f 83%,
+    #f00 100%
+  );
+  touch-action: none;
+}
+
+.hueMarker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  border: 1px solid #000;
+  background: #fff;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Alpha bar — current opaque color over a checker pattern */
+.alphaBar {
+  position: relative;
+  width: 160px;
+  height: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  cursor: ew-resize;
+  touch-action: none;
+  background:
+    linear-gradient(to right, transparent, var(--alpha-grad-end, #fff)),
+    repeating-conic-gradient(var(--bg-3) 0% 25%, var(--bg-1) 0% 50%) 0 0 / 8px 8px;
+}
+
+.alphaMarker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 3px;
+  border: 1px solid #000;
+  background: #fff;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* HSV/A numeric inputs */
+.numberRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-1);
+  width: 160px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.fieldLabel {
+  font-size: var(--text-2xs, 10px);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.field input {
+  width: 100%;
+  text-align: center;
+  font-size: var(--text-xs);
+}

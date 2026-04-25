@@ -1,11 +1,12 @@
 import { useState, useEffect, useLayoutEffect, lazy, Suspense } from 'react';
 import { CanvasViewport } from './ui/canvas';
 import { ToolBar } from './ui/toolbar';
-import { LayerPanel } from './ui/panels';
+import { LayerPanel, ColorPickerPanel } from './ui/panels';
 import { seedTestFixture } from './ui/canvas/testFixture';
 import { useLayerStore } from './state/useLayerStore';
 import { useHistoryStore } from './state/useHistoryStore';
 import { useToolStore } from './state/useToolStore';
+import { usePaletteStore } from './state/usePaletteStore';
 
 const DEV_HASH = '#/dev/components';
 
@@ -57,12 +58,23 @@ export function App(): JSX.Element {
         useHistoryStore.getState().redo();
         return;
       }
-      // Single-key tool shortcuts (no modifier)
+      // Single-key tool / color shortcuts (no modifier)
       if (!ctrl && !e.altKey && !e.shiftKey) {
         const tool = TOOL_SHORTCUTS[e.key.toLowerCase()];
         if (tool) {
           e.preventDefault();
           useToolStore.getState().setActiveTool(tool);
+          return;
+        }
+        if (e.key.toLowerCase() === 'x') {
+          e.preventDefault();
+          usePaletteStore.getState().swapColors();
+          return;
+        }
+        if (e.key.toLowerCase() === 'd') {
+          e.preventDefault();
+          usePaletteStore.getState().resetColors();
+          return;
         }
       }
     };
@@ -91,7 +103,19 @@ export function App(): JSX.Element {
     >
       <ToolBar />
       <CanvasViewport />
-      <LayerPanel />
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
+        <ColorPickerPanel />
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <LayerPanel />
+        </div>
+      </div>
     </div>
   );
 }

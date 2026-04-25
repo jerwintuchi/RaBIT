@@ -31,3 +31,6 @@ export {
 } from './factories';
 
 export { packRGBA, unpackRGBA, readPixel, writePixel } from './pixels';
+
+export { rgbToHsv, hsvToRgb, rgbaToHex, parseHex } from './colorConversion';
+export type { HSV } from './colorConversion';
