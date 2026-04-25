@@ -110,9 +110,20 @@ export function CanvasViewport(): JSX.Element {
     getEngine()?.setShowCheckerboard(showCheckerboard);
   }, [showCheckerboard]);
 
-  // Push active tool changes
+  // Push active tool changes (engine + cursor)
   useEffect(() => {
     setActiveTool(activeTool);
+    const cursorMap: Record<string, string> = {
+      pencil: 'crosshair',
+      eraser: 'crosshair',
+      line: 'crosshair',
+      eyedropper: 'crosshair',
+      hand: 'grab',
+      zoom: 'zoom-in',
+    };
+    if (containerRef.current) {
+      containerRef.current.style.cursor = cursorMap[activeTool] ?? 'default';
+    }
   }, [activeTool]);
 
   // Tool pointer event routing — runs in addition to useViewportInteraction's pan handlers

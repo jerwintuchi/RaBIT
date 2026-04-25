@@ -2,9 +2,9 @@ import type { CursorDef, ToolEngineContext, ToolId } from '../ToolEngine';
 import type { RGBA } from '../DataModel';
 import { BrushTool } from './BrushTool';
 
-/** 1px hard-edged pencil — paints with the active primary color. */
-export class PencilTool extends BrushTool {
-  readonly id: ToolId = 'pencil';
+/** 1px eraser — overwrites pixels with fully transparent (RGBA = 0). */
+export class EraserTool extends BrushTool {
+  readonly id: ToolId = 'eraser';
   readonly cursor: CursorDef = { type: 'crosshair' };
 
   constructor(ctx: ToolEngineContext) {
@@ -12,10 +12,10 @@ export class PencilTool extends BrushTool {
   }
 
   protected resolvePaintColor(): RGBA {
-    return this.ctx.getPrimaryColor();
+    return 0x00_00_00_00;
   }
 
   protected describe(count: number): string {
-    return `Pencil (${count}px)`;
+    return `Erase (${count}px)`;
   }
 }

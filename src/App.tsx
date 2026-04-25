@@ -10,9 +10,14 @@ const DEV_HASH = '#/dev/components';
 
 const DevHarness = lazy(() => import('./ui/dev/DevHarness').then((m) => ({ default: m.DevHarness })));
 
-// Single-key tool shortcuts (M4: pencil only)
+// Single-key tool shortcuts
 const TOOL_SHORTCUTS: Record<string, Parameters<ReturnType<typeof useToolStore.getState>['setActiveTool']>[0]> = {
   b: 'pencil',
+  e: 'eraser',
+  l: 'line',
+  i: 'eyedropper',
+  h: 'hand',
+  z: 'zoom',
 };
 
 export function App(): JSX.Element {

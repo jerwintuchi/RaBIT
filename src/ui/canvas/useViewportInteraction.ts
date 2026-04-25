@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useUIStore } from '../../state/useUIStore';
+import { useToolStore } from '../../state/useToolStore';
 
 const ZOOM_LEVELS = [1, 2, 4, 8, 16, 32] as const;
 
@@ -56,9 +57,11 @@ export function useViewportInteraction(
     let isPanning = false;
     let isSpaceDown = false;
     let lastPointer = { x: 0, y: 0 };
+    let savedCursor = '';
 
     const onPointerDown = (e: PointerEvent) => {
-      if (e.button === 1 || (e.button === 0 && isSpaceDown)) {
+      const isHandActive = useToolStore.getState().activeTool === 'hand';
+      if (e.button === 1 || (e.button === 0 && (isSpaceDown || isHandActive))) {
         isPanning = true;
         inputClaimedRef.current = true;
         lastPointer = { x: e.clientX, y: e.clientY };
@@ -119,8 +122,9 @@ export function useViewportInteraction(
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
+      if (e.code === 'Space' && !isSpaceDown) {
         isSpaceDown = true;
+        savedCursor = el.style.cursor;
         el.style.cursor = 'grab';
         e.preventDefault();
       }
@@ -163,7 +167,7 @@ export function useViewportInteraction(
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
         isSpaceDown = false;
-        el.style.cursor = '';
+        el.style.cursor = savedCursor;
       }
     };
 

@@ -36,6 +36,9 @@ export interface ToolEngineContext {
   getLayerData(layerId: LayerId): Uint8ClampedArray | null;
   getCanvasSize(): { width: number; height: number };
   getPrimaryColor(): RGBA;
+  setPrimaryColor(rgba: RGBA): void;
+  /** Reads the composited pixel at canvas coordinates (eyedropper). */
+  readCompositePixel(canvasX: number, canvasY: number): RGBA;
 
   /** Upload an in-progress stroke buffer to the GPU scratch texture. */
   updateScratch(data: Uint8ClampedArray): void;
@@ -47,6 +50,9 @@ export interface ToolEngineContext {
 
   /** Notify the renderer that a layer's pixel buffer was mutated in place. */
   notifyLayerChanged(layerId: LayerId, data: Uint8ClampedArray): void;
+
+  /** Zoom one step in/out, keeping the given canvas point fixed under the cursor. */
+  zoomToward(canvasX: number, canvasY: number, direction: 'in' | 'out'): void;
 }
 
 /** Common tool interface — see architecture.md §7. */

@@ -35,3 +35,7 @@ export function clearScratch(): void {
 export function uploadLayerData(layerId: string, data: Uint8ClampedArray): void {
   _engine?.uploadLayerData(layerId, data);
 }
+
+export function readCompositePixel(canvasX: number, canvasY: number): [number, number, number, number] {
+  return _engine?.readPixel(canvasX, canvasY) ?? [0, 0, 0, 0];
+}
