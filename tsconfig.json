@@ -37,9 +37,9 @@
       "@assets/*": ["src/assets/*"]
     },
 
-    "types": ["vite/client", "vitest/globals"]
+    "types": ["vite/client", "vitest/globals", "@playwright/test"]
   },
-  "include": ["src", "tests"],
+  "include": ["src", "tests", "e2e"],
   "exclude": ["node_modules", "dist", "src-tauri/target"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

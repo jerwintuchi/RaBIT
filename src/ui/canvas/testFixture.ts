@@ -3,6 +3,48 @@ import { useFrameStore } from '../../state/useFrameStore';
 import { useLayerStore } from '../../state/useLayerStore';
 
 /**
+ * Seeds a 4096×4096 four-layer project for the M3 performance test.
+ * Each layer is a solid flat color so GPU upload is fast and compositing
+ * is the bottleneck being measured (not JS fill time).
+ */
+export function seedPerfFixture(): void {
+  const W = 4096;
+  const H = 4096;
+  initNewProject('M3 Perf 4K', W, H);
+
+  const frame = useFrameStore.getState().frames[0];
+  if (!frame) return;
+
+  const colors: [number, number, number][] = [
+    [180, 40, 40],   // red
+    [40, 180, 40],   // green
+    [40, 40, 180],   // blue
+    [180, 180, 40],  // yellow
+  ];
+
+  const baseLayer = useLayerStore.getState().layers[0];
+  const layerIds: string[] = baseLayer ? [baseLayer.id] : [];
+  for (let i = 1; i < 4; i++) {
+    const l = useLayerStore.getState().addLayer({ name: `Layer ${i + 1}`, opacity: 0.5 });
+    layerIds.push(l.id);
+  }
+
+  for (let li = 0; li < layerIds.length; li++) {
+    const id = layerIds[li];
+    if (!id) continue;
+    const [r, g, b] = colors[li] ?? [128, 128, 128];
+    const data = new Uint8ClampedArray(W * H * 4);
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = r;
+      data[i + 1] = g;
+      data[i + 2] = b;
+      data[i + 3] = 255;
+    }
+    useFrameStore.getState().setCell(frame.id, id, { linked: false, data });
+  }
+}
+
+/**
  * Seeds the stores with a 32×32 two-layer test project for M3 visual verification.
  * Layer 0 (bottom): 8×8 checker pattern in red/blue.
  * Layer 1 (top):    solid orange, 60% opacity, Normal blend.

@@ -2,13 +2,15 @@ import { useState, useEffect, useLayoutEffect, lazy, Suspense } from 'react';
 import { CanvasViewport } from './ui/canvas';
 import { ToolBar } from './ui/toolbar';
 import { LayerPanel, ColorPickerPanel, PalettePanel } from './ui/panels';
-import { seedTestFixture } from './ui/canvas/testFixture';
+import { seedTestFixture, seedPerfFixture } from './ui/canvas/testFixture';
 import { useLayerStore } from './state/useLayerStore';
 import { useHistoryStore } from './state/useHistoryStore';
 import { useToolStore } from './state/useToolStore';
 import { usePaletteStore } from './state/usePaletteStore';
+import { getEngine } from './state/renderBridge';
 
 const DEV_HASH = '#/dev/components';
+const PERF_HASH = '#/test/perf4k';
 
 const DevHarness = lazy(() => import('./ui/dev/DevHarness').then((m) => ({ default: m.DevHarness })));
 
@@ -22,11 +24,23 @@ const TOOL_SHORTCUTS: Record<string, Parameters<ReturnType<typeof useToolStore.g
   z: 'zoom',
 };
 
+// Expose test helpers to Playwright via window in dev/test mode
+if (import.meta.env.DEV) {
+  (window as unknown as Record<string, unknown>)['__rabitTest'] = {
+    getEngine,
+    getLayerStore: () => useLayerStore.getState(),
+  };
+}
+
 export function App(): JSX.Element {
   const [showDev, setShowDev] = useState(() => window.location.hash === DEV_HASH);
+  const [showPerf, setShowPerf] = useState(() => window.location.hash === PERF_HASH);
 
   useEffect(() => {
-    const handler = () => setShowDev(window.location.hash === DEV_HASH);
+    const handler = () => {
+      setShowDev(window.location.hash === DEV_HASH);
+      setShowPerf(window.location.hash === PERF_HASH);
+    };
     window.addEventListener('hashchange', handler);
     return () => window.removeEventListener('hashchange', handler);
   }, []);
@@ -34,10 +48,13 @@ export function App(): JSX.Element {
   // Seed test fixture if no project is loaded yet
   const hasLayers = useLayerStore((s) => s.layers.length > 0);
   useLayoutEffect(() => {
-    if (!hasLayers && !showDev) {
+    if (hasLayers || showDev) return;
+    if (showPerf) {
+      seedPerfFixture();
+    } else {
       seedTestFixture();
     }
-  }, [hasLayers, showDev]);
+  }, [hasLayers, showDev, showPerf]);
 
   // Global keyboard shortcuts: Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo), tool keys
   useEffect(() => {
