@@ -19,7 +19,7 @@ export function ColorWells(): JSX.Element {
             style={{ background: rgbaToHex(secondary) }}
             aria-label={`Secondary color ${rgbaToHex(secondary)}`}
             onClick={() => {
-              // Click secondary swatch to make it primary (Photoshop convention)
+              usePaletteStore.getState().pushColorHistory(primary);
               usePaletteStore.getState().swapColors();
             }}
           />
@@ -39,7 +39,10 @@ export function ColorWells(): JSX.Element {
             type="button"
             className={styles.controlButton}
             aria-label="Swap colors"
-            onClick={() => usePaletteStore.getState().swapColors()}
+            onClick={() => {
+              usePaletteStore.getState().pushColorHistory(primary);
+              usePaletteStore.getState().swapColors();
+            }}
           >
             <IconSwap />
           </button>

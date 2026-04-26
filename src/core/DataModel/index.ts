@@ -34,3 +34,6 @@ export { packRGBA, unpackRGBA, readPixel, writePixel } from './pixels';
 
 export { rgbToHsv, hsvToRgb, rgbaToHex, parseHex } from './colorConversion';
 export type { HSV } from './colorConversion';
+
+export { parseGPL, parseHexList, parseCSV, parsePaletteFile } from './paletteImport';
+export type { ImportedSwatch } from './paletteImport';

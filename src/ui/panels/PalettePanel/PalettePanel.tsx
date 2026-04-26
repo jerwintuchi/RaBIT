@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { usePaletteStore } from '../../../state/usePaletteStore';
 import { paletteActions } from '../../../state/action-composers';
 import { rgbaToHex } from '../../../state/colorUtils';
 import type { Swatch } from '../../../state/dataModelTypes';
 import { ContextMenu, Tooltip } from '../../primitives';
 import type { ContextMenuItem } from '../../primitives';
-import { IconPlus } from '../../../assets/icons';
+import { IconPlus, IconUpload } from '../../../assets/icons';
 import styles from './PalettePanel.module.css';
 
 type SwatchSize = 'S' | 'M' | 'L';
@@ -21,8 +21,14 @@ export function PalettePanel(): JSX.Element {
   const swatches = usePaletteStore((s) => s.palette.swatches);
   const [size, setSize] = useState<SwatchSize>('M');
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [renamingIndex, setRenamingIndex] = useState<number | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [dragSrc, setDragSrc] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const onPickPrimary = (color: number) => {
+    usePaletteStore.getState().pushColorHistory(usePaletteStore.getState().primaryColor);
     usePaletteStore.getState().setPrimaryColor(color);
   };
 
@@ -30,6 +36,59 @@ export function PalettePanel(): JSX.Element {
     e.preventDefault();
     setMenu({ index, swatch, anchor: { x: e.clientX, y: e.clientY } });
   };
+
+  const commitRename = () => {
+    if (renamingIndex === null) return;
+    const trimmed = renameValue.trim();
+    paletteActions.renameSwatch(renamingIndex, trimmed || null);
+    setRenamingIndex(null);
+  };
+
+  // ── Drag-to-reorder ─────────────────────────────────────────────────────
+
+  const onDragStart = (e: React.DragEvent, index: number) => {
+    setDragSrc(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const onDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOver(index);
+  };
+
+  const onDrop = (e: React.DragEvent, toIndex: number) => {
+    e.preventDefault();
+    if (dragSrc !== null && dragSrc !== toIndex) {
+      paletteActions.moveSwatch(dragSrc, toIndex);
+    }
+    setDragSrc(null);
+    setDragOver(null);
+  };
+
+  const onDragEnd = () => {
+    setDragSrc(null);
+    setDragOver(null);
+  };
+
+  // ── Import ───────────────────────────────────────────────────────────────
+
+  const onImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result;
+      if (typeof text === 'string') {
+        paletteActions.importSwatches(file.name, text);
+      }
+    };
+    reader.readAsText(file);
+    // Reset so the same file can be re-imported
+    e.target.value = '';
+  };
+
+  // ── Context menu items ───────────────────────────────────────────────────
 
   const menuItems: ContextMenuItem[] = menu
     ? [
@@ -51,6 +110,14 @@ export function PalettePanel(): JSX.Element {
               menu.index,
               usePaletteStore.getState().primaryColor,
             ),
+        },
+        {
+          type: 'item',
+          label: 'Rename…',
+          onClick: () => {
+            setRenameValue(menu.swatch.name ?? '');
+            setRenamingIndex(menu.index);
+          },
         },
         { type: 'separator' },
         {
@@ -81,6 +148,16 @@ export function PalettePanel(): JSX.Element {
               </button>
             ))}
           </div>
+          <Tooltip content="Import palette (GPL / CSV / hex)" placement="left">
+            <button
+              type="button"
+              className={styles.headerButton}
+              aria-label="Import palette"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <IconUpload />
+            </button>
+          </Tooltip>
           <Tooltip content="Add swatch from primary color" placement="left">
             <button
               type="button"
@@ -94,26 +171,62 @@ export function PalettePanel(): JSX.Element {
         </div>
       </div>
 
+      {/* Hidden file input for palette import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".gpl,.csv,.txt,.hex"
+        style={{ display: 'none' }}
+        onChange={onImportFile}
+      />
+
       <div
         className={styles.grid}
         style={{ '--swatch-size': `${SIZE_PX[size]}px` } as React.CSSProperties}
       >
-        {swatches.map((sw, idx) => (
-          <Tooltip
-            key={`${idx}-${sw.color}`}
-            content={sw.name ?? rgbaToHex(sw.color)}
-            placement="top"
-          >
-            <button
-              type="button"
-              className={styles.swatch}
-              style={{ background: rgbaToHex(sw.color) }}
-              aria-label={sw.name ?? `Swatch ${rgbaToHex(sw.color)}`}
-              onClick={() => onPickPrimary(sw.color)}
-              onContextMenu={(e) => onContextMenu(e, idx, sw)}
-            />
-          </Tooltip>
-        ))}
+        {swatches.map((sw, idx) => {
+          const isDragSrc = dragSrc === idx;
+          const isDragTarget = dragOver === idx && dragSrc !== idx;
+
+          if (renamingIndex === idx) {
+            return (
+              <input
+                key={`rename-${idx}`}
+                className={styles.renameInput}
+                value={renameValue}
+                autoFocus
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={commitRename}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitRename();
+                  if (e.key === 'Escape') setRenamingIndex(null);
+                }}
+              />
+            );
+          }
+
+          return (
+            <Tooltip
+              key={`${idx}-${sw.color}`}
+              content={sw.name ?? rgbaToHex(sw.color)}
+              placement="top"
+            >
+              <button
+                type="button"
+                draggable
+                className={`${styles.swatch} ${isDragSrc ? styles.swatchDragging : ''} ${isDragTarget ? styles.swatchDropTarget : ''}`}
+                style={{ background: rgbaToHex(sw.color) }}
+                aria-label={sw.name ?? `Swatch ${rgbaToHex(sw.color)}`}
+                onClick={() => onPickPrimary(sw.color)}
+                onContextMenu={(e) => onContextMenu(e, idx, sw)}
+                onDragStart={(e) => onDragStart(e, idx)}
+                onDragOver={(e) => onDragOver(e, idx)}
+                onDrop={(e) => onDrop(e, idx)}
+                onDragEnd={onDragEnd}
+              />
+            </Tooltip>
+          );
+        })}
         {swatches.length === 0 && (
           <span className={styles.empty}>Click + to save the primary color</span>
         )}

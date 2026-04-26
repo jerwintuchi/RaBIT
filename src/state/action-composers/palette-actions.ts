@@ -1,9 +1,10 @@
-import type { RGBA, Swatch } from '../../core/DataModel';
-import { makeSwatch } from '../../core/DataModel';
+import type { RGBA, Swatch, ImportedSwatch } from '../../core/DataModel';
+import { makeSwatch, parsePaletteFile } from '../../core/DataModel';
 import {
   AddSwatchCommand,
   RemoveSwatchCommand,
   UpdateSwatchCommand,
+  MoveSwatchCommand,
   type PaletteCommandDeps,
 } from '../../core/commands/PaletteCommands';
 import { usePaletteStore } from '../usePaletteStore';
@@ -27,6 +28,8 @@ function getDeps(): PaletteCommandDeps {
         const sw = s.palette.swatches[index];
         if (sw) Object.assign(sw, patch);
       }),
+    reorderSwatches: (fromIndex, toIndex) =>
+      usePaletteStore.getState().reorderSwatches(fromIndex, toIndex),
   };
   return _deps;
 }
@@ -72,6 +75,23 @@ export function updateSwatchColor(index: number, color: RGBA): void {
         'Change swatch color',
       ),
     );
+}
+
+export function moveSwatch(fromIndex: number, toIndex: number): void {
+  if (fromIndex === toIndex) return;
+  useHistoryStore.getState().execute(new MoveSwatchCommand(fromIndex, toIndex, getDeps()));
+}
+
+export function importSwatches(filename: string, text: string): void {
+  const items: ImportedSwatch[] = parsePaletteFile(filename, text);
+  if (items.length === 0) return;
+  const { palette } = usePaletteStore.getState();
+  let insertAt = palette.swatches.length;
+  for (const item of items) {
+    const swatch = makeSwatch(item.color, item.name ?? null);
+    useHistoryStore.getState().execute(new AddSwatchCommand(swatch, insertAt, getDeps()));
+    insertAt++;
+  }
 }
 
 export function renameSwatch(index: number, name: string | null): void {

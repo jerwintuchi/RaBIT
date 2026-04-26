@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ColorWells } from './ColorWells';
+import { ColorHistory } from './ColorHistory';
 import { HsvPicker } from './HsvPicker';
 import { RgbPicker } from './RgbPicker';
 import { HexPicker } from './HexPicker';
@@ -23,6 +24,7 @@ export function ColorPickerPanel(): JSX.Element {
       </div>
 
       <ColorWells />
+      <ColorHistory />
 
       <div className={styles.tabs} role="tablist" aria-label="Color picker mode">
         {MODES.map((m) => (

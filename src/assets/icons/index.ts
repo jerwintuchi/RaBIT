@@ -25,3 +25,4 @@ export { IconPause } from './IconPause';
 export { IconRecord } from './IconRecord';
 export { IconSettings } from './IconSettings';
 export { IconCheck } from './IconCheck';
+export { IconUpload } from './IconUpload';

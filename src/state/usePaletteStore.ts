@@ -3,10 +3,13 @@ import { immer } from 'zustand/middleware/immer';
 import type { Palette, Swatch, RGBA } from '../core/DataModel';
 import { makePalette, makeSwatch } from '../core/DataModel';
 
+const MAX_HISTORY = 16;
+
 interface PaletteState {
   palette: Palette;
   primaryColor: RGBA;
   secondaryColor: RGBA;
+  colorHistory: RGBA[];
 
   setPalette(palette: Palette): void;
   addSwatch(color: RGBA, name?: string): void;
@@ -17,6 +20,7 @@ interface PaletteState {
   setSecondaryColor(color: RGBA): void;
   swapColors(): void;
   resetColors(): void;
+  pushColorHistory(color: RGBA): void;
 }
 
 // Default: black primary, white secondary (as packed RGBA)
@@ -28,6 +32,7 @@ export const usePaletteStore = create<PaletteState>()(
     palette: makePalette({ name: 'Untitled Palette' }),
     primaryColor: BLACK,
     secondaryColor: WHITE,
+    colorHistory: [],
 
     setPalette(palette) {
       set((s) => {
@@ -85,6 +90,14 @@ export const usePaletteStore = create<PaletteState>()(
       set((s) => {
         s.primaryColor = BLACK;
         s.secondaryColor = WHITE;
+      });
+    },
+
+    pushColorHistory(color) {
+      set((s) => {
+        // Remove duplicate if already present, then prepend
+        const filtered = s.colorHistory.filter((c) => c !== color);
+        s.colorHistory = [color, ...filtered].slice(0, MAX_HISTORY);
       });
     },
   })),

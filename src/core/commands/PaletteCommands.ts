@@ -7,6 +7,7 @@ export interface PaletteCommandDeps {
   insertSwatch(swatch: Swatch, index: number): void;
   removeSwatch(index: number): void;
   patchSwatch(index: number, patch: Partial<Swatch>): void;
+  reorderSwatches(fromIndex: number, toIndex: number): void;
 }
 
 // ── Add ────────────────────────────────────────────────────────────────────
@@ -70,5 +71,25 @@ export class UpdateSwatchCommand implements Command {
   }
   undo(): void {
     this.deps.patchSwatch(this.atIndex, this.before);
+  }
+}
+
+// ── Move (reorder) ─────────────────────────────────────────────────────────
+
+export class MoveSwatchCommand implements Command {
+  readonly id = nanoid(12);
+  readonly description = 'Reorder swatch';
+
+  constructor(
+    private readonly fromIndex: number,
+    private readonly toIndex: number,
+    private readonly deps: PaletteCommandDeps,
+  ) {}
+
+  execute(): void {
+    this.deps.reorderSwatches(this.fromIndex, this.toIndex);
+  }
+  undo(): void {
+    this.deps.reorderSwatches(this.toIndex, this.fromIndex);
   }
 }

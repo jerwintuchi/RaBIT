@@ -53,7 +53,11 @@ function buildContext(): ToolEngineContext {
       return { width, height };
     },
     getPrimaryColor: () => usePaletteStore.getState().primaryColor,
-    setPrimaryColor: (rgba) => usePaletteStore.getState().setPrimaryColor(rgba),
+    setPrimaryColor: (rgba) => {
+      const store = usePaletteStore.getState();
+      store.pushColorHistory(store.primaryColor);
+      store.setPrimaryColor(rgba);
+    },
     readCompositePixel: (cx, cy) => {
       const [r, g, b, a] = readCompositePixel(cx, cy);
       return packRGBA(r, g, b, a);
