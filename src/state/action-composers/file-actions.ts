@@ -131,6 +131,11 @@ async function confirmDiscardIfDirty(intent: import('../useUIStore').UnsavedInte
   const { meta } = useProjectStore.getState();
   if (!meta.dirty) return true;
 
+  // Dialog already open — a second concurrent call (e.g. keyboard shortcut while
+  // close-guard is showing) would overwrite pendingDiscardResolver and leak the
+  // first promise. Reject the new call instead.
+  if (pendingDiscardResolver) return false;
+
   return new Promise((resolve) => {
     pendingDiscardResolver = resolve;
     useUIStore.getState().showUnsavedChangesDialog(intent);
