@@ -13,16 +13,18 @@ export function IconPencil({ size = 16, ...props }: IconProps): JSX.Element {
       height={size}
       fill="none"
       stroke="currentColor"
-      strokeWidth="1"
+      strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
       {...props}
     >
-      <line x1="12" y1="2" x2="4" y2="10" />
-      <polygon points="2,12 4,10 6,12 4,14" />
-      <line x1="12" y1="2" x2="14" y2="4" />
-      <rect x="12" y="1" width="3" height="2" rx="0.5" transform="rotate(45 13.5 2)" />
+      {/* Pencil body outline: tip at bottom-left, eraser at top-right */}
+      <path d="M3 13 L2 14 L4 14 L14 4 L12 2 Z" />
+      {/* Eraser band separator */}
+      <line x1="11" y1="3" x2="13" y2="5" />
+      {/* Wood-to-lead separator near tip */}
+      <line x1="3.5" y1="12.5" x2="5.5" y2="10.5" />
     </svg>
   );
 }

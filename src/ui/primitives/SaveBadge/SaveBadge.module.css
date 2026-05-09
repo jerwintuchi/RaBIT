@@ -1,0 +1,50 @@
+.badge {
+  position: fixed;
+  top: 36px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px 5px 10px;
+  border-radius: 99px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-1);
+  white-space: nowrap;
+  animation: pop-in 140ms cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+}
+
+.badge.leaving {
+  animation: fade-out 280ms ease forwards;
+}
+
+.check {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.check svg {
+  display: block;
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes fade-out {
+  from { opacity: 1; transform: translateX(-50%) translateY(0); }
+  to   { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+}

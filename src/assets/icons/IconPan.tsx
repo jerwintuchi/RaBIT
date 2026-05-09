@@ -13,13 +13,21 @@ export function IconPan({ size = 16, ...props }: IconProps): JSX.Element {
       height={size}
       fill="none"
       stroke="currentColor"
-      strokeWidth="1"
+      strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
       {...props}
     >
-      <path d="M8 2 L8 9 M5 4 L5 9 M11 4 L11 9 M3 7 L3 11 Q3 14 8 14 Q13 14 13 11 L13 7 M3 7 Q3 9 5 9 M13 7 Q13 9 11 9" />
+      {/* Four fingers (index, middle, ring, pinky) */}
+      <line x1="6" y1="10" x2="6" y2="2" />
+      <line x1="8" y1="10" x2="8" y2="1" />
+      <line x1="10" y1="10" x2="10" y2="2" />
+      <line x1="12" y1="10" x2="12" y2="4" />
+      {/* Thumb curving up from left */}
+      <path d="M4 10 L4 7 Q4 5 5.5 5 Q6 5 6 6" />
+      {/* Curved palm connecting all fingers at bottom */}
+      <path d="M4 10 Q3 10 3 12 Q3 15 8 15 Q13 15 13 12 L13 10" />
     </svg>
   );
 }

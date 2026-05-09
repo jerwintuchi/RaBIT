@@ -63,10 +63,23 @@ export class RenderingEngine {
   private showCheckerboard = true;
   private rafId: number | null = null;
 
-  // Scratch (in-progress stroke preview, M4)
+  // Scratch (in-progress stroke preview)
   private pendingScratch: Uint8ClampedArray | null = null;
   private scratchActive = false;
   private scratchClearPending = false;
+  private scratchErase = false;
+  private activeLayerId = '';
+
+  // Onion skinning — up to 5 prev + 5 next tinted overlays
+  private static readonly MAX_ONION = 5;
+  private onionPrevFBOs: FBOTarget[] = [];
+  private onionNextFBOs: FBOTarget[] = [];
+  private onionPrevCount = 0;
+  private onionNextCount = 0;
+  private pendingOnionPrev: (Uint8ClampedArray | null)[] = [];
+  private pendingOnionNext: (Uint8ClampedArray | null)[] = [];
+  private onionOpacity = 0.5;
+  private onionPendingUpdate = false;
 
   // ── Initialization ──────────────────────────────────────────────────────────
 
@@ -83,15 +96,19 @@ export class RenderingEngine {
 
     this.checkerProg = this.compileProgram(QUAD_VERT, CHECKERBOARD_FRAG, {
       attribs: ['a_position'],
-      uniforms: ['u_ndcMin', 'u_ndcMax', 'u_quadScreenSize', 'u_color0', 'u_color1'],
+      uniforms: ['u_ndcMin', 'u_ndcMax', 'u_quadScreenSize', 'u_tileScreenSize', 'u_color0', 'u_color1'],
     });
     this.compositeProg = this.compileProgram(QUAD_VERT, COMPOSITE_FRAG, {
       attribs: ['a_position'],
-      uniforms: ['u_ndcMin', 'u_ndcMax', 'u_layer', 'u_composite', 'u_opacity', 'u_blendMode'],
+      uniforms: ['u_ndcMin', 'u_ndcMax', 'u_layer', 'u_composite', 'u_opacity', 'u_blendMode', 'u_scratch', 'u_applyErase'],
     });
     this.blitProg = this.compileProgram(QUAD_VERT, BLIT_FRAG, {
       attribs: ['a_position'],
-      uniforms: ['u_ndcMin', 'u_ndcMax', 'u_texture'],
+      uniforms: [
+        'u_ndcMin', 'u_ndcMax',
+        'u_texture', 'u_scratchTex',
+        'u_eraseMode', 'u_globalAlpha', 'u_tintColor',
+      ],
     });
     this.gridProg = this.compileProgram(QUAD_VERT, GRID_FRAG, {
       attribs: ['a_position'],
@@ -116,6 +133,10 @@ export class RenderingEngine {
     this.fboA = this.createFBO(1, 1);
     this.fboB = this.createFBO(1, 1);
     this.scratchFBO = this.createFBO(1, 1);
+    for (let i = 0; i < RenderingEngine.MAX_ONION; i++) {
+      this.onionPrevFBOs.push(this.createFBO(1, 1));
+      this.onionNextFBOs.push(this.createFBO(1, 1));
+    }
 
     this.dirty = DirtyFlag.FULL;
   }
@@ -126,10 +147,34 @@ export class RenderingEngine {
     if (this.canvasW === w && this.canvasH === h) return;
     this.canvasW = w;
     this.canvasH = h;
+    // Evict all cached layer textures — they were allocated at the old size.
+    // texSubImage2D would fail with GL_INVALID_VALUE if we tried to upload
+    // new-size pixel data into an old-size texture.
+    this.texCache.flush();
     this.resizeFBO(this.fboA, w, h);
     this.resizeFBO(this.fboB, w, h);
     this.resizeFBO(this.scratchFBO, w, h);
+    for (const fbo of [...this.onionPrevFBOs, ...this.onionNextFBOs]) {
+      this.resizeFBO(fbo, w, h);
+    }
     this.markDirty(DirtyFlag.FULL);
+  }
+
+  /**
+   * Supply pre-composited RGBA pixel arrays for onion skin frames.
+   * prevFrames[0] = 1 frame back, prevFrames[1] = 2 frames back, etc.
+   * Pass empty arrays to disable onion skin rendering.
+   */
+  setOnionFrames(
+    prevFrames: (Uint8ClampedArray | null)[],
+    nextFrames: (Uint8ClampedArray | null)[],
+    opacity: number,
+  ): void {
+    this.pendingOnionPrev = prevFrames.slice(0, RenderingEngine.MAX_ONION);
+    this.pendingOnionNext = nextFrames.slice(0, RenderingEngine.MAX_ONION);
+    this.onionOpacity = opacity;
+    this.onionPendingUpdate = true;
+    this.markDirty(DirtyFlag.OVERLAY);
   }
 
   resize(viewportW: number, viewportH: number): void {
@@ -185,7 +230,27 @@ export class RenderingEngine {
     this.scratchActive = false;
     this.scratchClearPending = true;
     this.pendingScratch = null;
+    this.scratchErase = false;
     this.markDirty(DirtyFlag.OVERLAY);
+  }
+
+  /**
+   * Switch scratch overlay blend mode:
+   *   false → normal SRC_OVER (pencil/line preview)
+   *   true  → DST_OUT (eraser preview — punches through composite to checkerboard)
+   */
+  setScratchErase(on: boolean): void {
+    if (this.scratchErase !== on) {
+      this.scratchErase = on;
+      this.markDirty(DirtyFlag.OVERLAY);
+    }
+  }
+
+  setActiveLayer(id: string): void {
+    if (this.activeLayerId !== id) {
+      this.activeLayerId = id;
+      this.markDirty(DirtyFlag.OVERLAY);
+    }
   }
 
   // ── Render loop ─────────────────────────────────────────────────────────────
@@ -235,11 +300,34 @@ export class RenderingEngine {
     this.deleteFBO(this.fboA);
     this.deleteFBO(this.fboB);
     this.deleteFBO(this.scratchFBO);
+    for (const fbo of [...this.onionPrevFBOs, ...this.onionNextFBOs]) {
+      this.deleteFBO(fbo);
+    }
     gl.deleteBuffer(this.quadVBO);
     gl.deleteVertexArray(this.quadVAO);
     for (const p of [this.checkerProg, this.compositeProg, this.blitProg, this.gridProg]) {
       gl.deleteProgram(p.program);
     }
+  }
+
+  // ── Onion helpers ────────────────────────────────────────────────────────────
+
+  private uploadOnionTexture(fbo: FBOTarget, data: Uint8ClampedArray | null): void {
+    const { gl } = this;
+    if (!data) {
+      // Clear to transparent
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.fbo);
+      gl.viewport(0, 0, this.canvasW, this.canvasH);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, this.viewportW, this.viewportH);
+      return;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, fbo.texture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.canvasW, this.canvasH, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   }
 
   // ── Internal rendering ───────────────────────────────────────────────────────
@@ -255,6 +343,9 @@ export class RenderingEngine {
     if (this.pendingScratch) {
       const { gl } = this;
       gl.bindTexture(gl.TEXTURE_2D, this.scratchFBO.texture);
+      // UNPACK_FLIP_Y_WEBGL mirrors the row order on upload so that after the
+      // Y-flip in blit.frag, scratch pixel (x, y) appears at canvas coord (x, y).
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
       gl.texSubImage2D(
         gl.TEXTURE_2D,
         0,
@@ -266,8 +357,28 @@ export class RenderingEngine {
         gl.UNSIGNED_BYTE,
         this.pendingScratch,
       );
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
       this.pendingScratch = null;
     }
+    // Upload pending onion frames — only when setOnionFrames was explicitly called
+    if (this.onionPendingUpdate) {
+      for (let i = 0; i < this.pendingOnionPrev.length; i++) {
+        const data = this.pendingOnionPrev[i] ?? null;
+        const fbo = this.onionPrevFBOs[i];
+        if (fbo) this.uploadOnionTexture(fbo, data);
+      }
+      this.onionPrevCount = this.pendingOnionPrev.length;
+      for (let i = 0; i < this.pendingOnionNext.length; i++) {
+        const data = this.pendingOnionNext[i] ?? null;
+        const fbo = this.onionNextFBOs[i];
+        if (fbo) this.uploadOnionTexture(fbo, data);
+      }
+      this.onionNextCount = this.pendingOnionNext.length;
+      this.pendingOnionPrev = [];
+      this.pendingOnionNext = [];
+      this.onionPendingUpdate = false;
+    }
+
     if (this.scratchClearPending) {
       // Clear the scratch texture to fully transparent
       const { gl } = this;
@@ -280,7 +391,9 @@ export class RenderingEngine {
       this.scratchClearPending = false;
     }
 
-    if (this.dirty & (DirtyFlag.LAYER_DATA | DirtyFlag.LAYER_ORDER | DirtyFlag.FULL)) {
+    const needComposite = this.dirty & (DirtyFlag.LAYER_DATA | DirtyFlag.LAYER_ORDER | DirtyFlag.FULL);
+    const eraseOverlay = this.scratchActive && this.scratchErase && (this.dirty & DirtyFlag.OVERLAY);
+    if (needComposite || eraseOverlay) {
       this.compositeToFBO();
     }
 
@@ -307,6 +420,11 @@ export class RenderingEngine {
     // Texture units
     gl.uniform1i(u(this.compositeProg, 'u_layer'), 0);
     gl.uniform1i(u(this.compositeProg, 'u_composite'), 1);
+    gl.uniform1i(u(this.compositeProg, 'u_scratch'), 2);
+
+    // Bind scratch texture to TEXTURE2 for erase preview
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.scratchFBO.texture);
 
     let src = fboA;
     let dst = fboB;
@@ -330,6 +448,9 @@ export class RenderingEngine {
 
       gl.uniform1f(u(this.compositeProg, 'u_opacity'), layer.opacity);
       gl.uniform1i(u(this.compositeProg, 'u_blendMode'), BLEND_MODE_INDEX[layer.blendMode] ?? 0);
+      // Apply erase preview only to the active layer
+      const applyErase = this.scratchActive && this.scratchErase && layer.id === this.activeLayerId ? 1 : 0;
+      gl.uniform1i(u(this.compositeProg, 'u_applyErase'), applyErase);
 
       gl.disable(gl.BLEND);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -377,26 +498,70 @@ export class RenderingEngine {
       gl.bindVertexArray(this.quadVAO);
       this.setNdcUniforms(this.checkerProg, minX, minY, maxX, maxY);
       gl.uniform2f(u(this.checkerProg, 'u_quadScreenSize'), qw, qh);
+      // Each checker tile = one canvas pixel on screen (zoom screen pixels wide).
+      // Clamp to a minimum so sub-pixel zoom doesn't collapse to zero tile size.
+      gl.uniform1f(u(this.checkerProg, 'u_tileScreenSize'), Math.max(this.transform.zoom, 1));
       gl.uniform4f(u(this.checkerProg, 'u_color0'), 0.376, 0.376, 0.376, 1.0); // #606060
       gl.uniform4f(u(this.checkerProg, 'u_color1'), 0.251, 0.251, 0.251, 1.0); // #404040
       gl.disable(gl.BLEND);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
 
-    // 2. Blit composite FBO (alpha blended over checkerboard)
+    // Setup blitProg — shared for onion, composite, and scratch passes
     gl.useProgram(this.blitProg.program);
     gl.bindVertexArray(this.quadVAO);
     this.setNdcUniforms(this.blitProg, minX, minY, maxX, maxY);
+    // Bind scratch to TEXTURE1 (shared across all blit passes)
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, this.scratchFBO.texture);
+    gl.uniform1i(u(this.blitProg, 'u_scratchTex'), 1);
+    gl.uniform1i(u(this.blitProg, 'u_eraseMode'), 0);
+    gl.uniform4f(u(this.blitProg, 'u_tintColor'), 0, 0, 0, 0);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    // 2a. Onion skin — prev frames (red tint), rendered before the composite
+    for (let i = this.onionPrevCount - 1; i >= 0; i--) {
+      const fbo = this.onionPrevFBOs[i];
+      if (!fbo) continue;
+      const alpha = this.onionOpacity * (1 - i * 0.2);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, fbo.texture);
+      gl.uniform1i(u(this.blitProg, 'u_texture'), 0);
+      gl.uniform1f(u(this.blitProg, 'u_globalAlpha'), alpha);
+      gl.uniform4f(u(this.blitProg, 'u_tintColor'), 1.0, 0.2, 0.2, 0.4); // red tint
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    // 2b. Onion skin — next frames (blue tint)
+    for (let i = this.onionNextCount - 1; i >= 0; i--) {
+      const fbo = this.onionNextFBOs[i];
+      if (!fbo) continue;
+      const alpha = this.onionOpacity * (1 - i * 0.2);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, fbo.texture);
+      gl.uniform1i(u(this.blitProg, 'u_texture'), 0);
+      gl.uniform1f(u(this.blitProg, 'u_globalAlpha'), alpha);
+      gl.uniform4f(u(this.blitProg, 'u_tintColor'), 0.2, 0.4, 1.0, 0.4); // blue tint
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    // 2c. Blit composite FBO (alpha blended over checkerboard/onion).
+    //     When erasing, the shader cuts holes via scratch alpha (no DST_OUT artifacts).
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.fboA.texture);
     gl.uniform1i(u(this.blitProg, 'u_texture'), 0);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform1i(u(this.blitProg, 'u_eraseMode'), 0); // erase handled in compositeToFBO
+    gl.uniform1f(u(this.blitProg, 'u_globalAlpha'), 1.0);
+    gl.uniform4f(u(this.blitProg, 'u_tintColor'), 0, 0, 0, 0);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-    // 2b. Blit scratch buffer (in-progress stroke preview) over the composite
-    if (this.scratchActive) {
+    // 2d. Scratch SRC_OVER for non-erase preview (pencil/line)
+    if (this.scratchActive && !this.scratchErase) {
+      gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.scratchFBO.texture);
+      gl.uniform1i(u(this.blitProg, 'u_texture'), 0);
+      gl.uniform1i(u(this.blitProg, 'u_eraseMode'), 0);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
     gl.disable(gl.BLEND);

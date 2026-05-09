@@ -47,6 +47,15 @@
   background: var(--accent-muted);
 }
 
+/* Multi-selected but not the active layer */
+.selected {
+  background: color-mix(in srgb, var(--accent-muted) 50%, transparent);
+}
+
+.selected:hover {
+  background: color-mix(in srgb, var(--accent-muted) 65%, transparent);
+}
+
 .iconButton {
   display: inline-flex;
   align-items: center;

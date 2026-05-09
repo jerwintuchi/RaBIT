@@ -53,11 +53,16 @@ export class TextureCache {
     }
   }
 
-  dispose(): void {
+  /** Evict all cached textures so they are re-uploaded at the new size after a canvas resize. */
+  flush(): void {
     for (const e of this.entries.values()) {
       this.gl.deleteTexture(e.texture);
     }
     this.entries.clear();
+  }
+
+  dispose(): void {
+    this.flush();
   }
 
   private evictLRU(): void {

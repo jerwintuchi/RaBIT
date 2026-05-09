@@ -8,6 +8,7 @@ import type {
   ToolId,
 } from '../ToolEngine';
 import { DrawCommand, type PixelDelta } from '../commands/DrawCommand';
+import { useToolStore, isInSelection } from '../../state/useToolStore';
 
 /**
  * Shared base for hard-edged 1px brush-style tools (pencil, eraser).
@@ -35,6 +36,15 @@ export abstract class BrushTool implements Tool {
 
   /** Called per-stroke to determine the paint color (e.g. primary or transparent). */
   protected abstract resolvePaintColor(): RGBA;
+
+  /**
+   * Color written into the scratch preview texture. Defaults to the same as
+   * resolvePaintColor(). EraserTool overrides this to an opaque marker so that
+   * the scratch DST_OUT pass has pixels to cut through.
+   */
+  protected scratchColor(): RGBA {
+    return this.color;
+  }
 
   /** Description shown in the history panel for this command. */
   protected abstract describe(deltaCount: number): string;
@@ -128,13 +138,14 @@ export abstract class BrushTool implements Tool {
     const h = this.scratchH;
     if (x < 0 || y < 0 || x >= w || y >= h) return;
     if (!this.scratch || !this.layerBuf) return;
+    if (!isInSelection(useToolStore.getState().selection, x, y)) return;
 
     const key = y * w + x;
     if (!this.deltas.has(key)) {
       const before = readPixel(this.layerBuf, x, y, w);
       this.deltas.set(key, { x, y, before, after: this.color });
     }
-    writePixel(this.scratch, x, y, w, this.color);
+    writePixel(this.scratch, x, y, w, this.scratchColor());
   }
 
   private plotLine(x0: number, y0: number, x1: number, y1: number): void {

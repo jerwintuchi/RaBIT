@@ -1,11 +1,17 @@
 // Bridges the ToolEngine into the state layer. Owns the engine singleton and
 // builds a ToolEngineContext that reads from / writes to Zustand stores.
+import { perfMark, perfMeasure } from '../core/perfProbe';
 import { ToolEngine } from '../core/ToolEngine';
 import type { ToolEngineContext, ToolId, RawPointerInput } from '../core/ToolEngine';
 import {
   PencilTool,
   EraserTool,
   LineTool,
+  RectangleTool,
+  EllipseTool,
+  FillTool,
+  MoveTool,
+  MarqueeTool,
   EyedropperTool,
   HandTool,
   ZoomTool,
@@ -22,18 +28,14 @@ import { resolveCell } from './action-composers/frame-utils';
 import {
   updateScratch as bridgeUpdateScratch,
   clearScratch as bridgeClearScratch,
+  setScratchErase as bridgeSetScratchErase,
+  setActiveLayerOnEngine,
   uploadLayerData,
   readCompositePixel,
   DirtyFlag,
   getEngine,
 } from './renderBridge';
-
-const ZOOM_LEVELS = [1, 2, 4, 8, 16, 32] as const;
-
-function snapZoom(current: number, direction: 'in' | 'out'): number {
-  if (direction === 'in') return ZOOM_LEVELS.find((z) => z > current) ?? 32;
-  return [...ZOOM_LEVELS].reverse().find((z) => z < current) ?? 1;
-}
+import { snapZoom } from './zoomLevels';
 
 let _toolEngine: ToolEngine | null = null;
 
@@ -64,12 +66,22 @@ function buildContext(): ToolEngineContext {
     },
     updateScratch: (data) => bridgeUpdateScratch(data),
     clearScratch: () => bridgeClearScratch(),
+    setScratchErase: (on) => {
+      if (on) setActiveLayerOnEngine(useLayerStore.getState().activeLayerId ?? '');
+      bridgeSetScratchErase(on);
+    },
     executeCommand: (cmd: Command) => useHistoryStore.getState().execute(cmd),
     notifyLayerChanged: (layerId, data) => {
       uploadLayerData(layerId, data);
       getEngine()?.markDirty(DirtyFlag.LAYER_DATA);
       // Signal subscribers (e.g. thumbnails) that this layer's pixels changed
       useLayerStore.getState().bumpDataVersion(layerId);
+    },
+    previewLayerOnGPU: (layerId, data) => {
+      // Upload directly to GPU — does NOT touch the store or data versions.
+      // Used for live move-preview so original selection pixels vanish while dragging.
+      uploadLayerData(layerId, data);
+      getEngine()?.markDirty(DirtyFlag.LAYER_DATA | DirtyFlag.FULL);
     },
     zoomToward: (cx, cy, direction) => {
       const ui = useUIStore.getState();
@@ -92,6 +104,11 @@ export function initToolEngine(): ToolEngine {
   engine.registerTool(new PencilTool(ctx));
   engine.registerTool(new EraserTool(ctx));
   engine.registerTool(new LineTool(ctx));
+  engine.registerTool(new RectangleTool(ctx));
+  engine.registerTool(new EllipseTool(ctx));
+  engine.registerTool(new FillTool(ctx));
+  engine.registerTool(new MoveTool(ctx));
+  engine.registerTool(new MarqueeTool(ctx));
   engine.registerTool(new EyedropperTool(ctx));
   engine.registerTool(new HandTool(ctx));
   engine.registerTool(new ZoomTool(ctx));
@@ -118,7 +135,9 @@ export function setActiveTool(id: ToolId): void {
 }
 
 export function toolPointerDown(input: RawPointerInput): void {
+  perfMark();
   _toolEngine?.pointerDown(input);
+  requestAnimationFrame(() => perfMeasure('pointerDown→RAF'));
 }
 
 export function toolPointerMove(input: RawPointerInput): void {

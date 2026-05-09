@@ -9,6 +9,7 @@ import {
   SetVisibilityCommand,
   SetLockedCommand,
   RenameLayerCommand,
+  MergeDownCommand,
   type LayerCommandDeps,
 } from '../../core/commands/LayerCommands';
 import { useLayerStore } from '../useLayerStore';
@@ -20,7 +21,7 @@ import {
   uploadLayerData,
   DirtyFlag,
 } from '../renderBridge';
-import { resolveCell } from './frame-utils';
+import { cloneCell, resolveCell } from './frame-utils';
 
 // Lazy-instantiated singleton — all layer commands share the same deps object
 let _deps: LayerCommandDeps | null = null;
@@ -237,10 +238,71 @@ export function renameLayer(layerId: LayerId, name: string): void {
     );
 }
 
+/**
+ * Merge the active layer down onto the layer immediately below it.
+ * The composite (upper over lower, alpha-over per pixel) replaces the lower
+ * layer's cells. The upper layer is then removed. Fully undoable.
+ */
+export function mergeDown(activeLayerId: LayerId): void {
+  const { layers, activeLayerId: priorActive } = useLayerStore.getState();
+  const upperIdx = layers.findIndex((l) => l.id === activeLayerId);
+  if (upperIdx <= 0) return; // already the bottom layer
+  const upperLayer = layers[upperIdx]!;
+  const lowerLayer = layers[upperIdx - 1]!;
+  const { frames } = useFrameStore.getState();
+
+  const mergedCells = new Map<FrameId, Cell>();
+  const upperOriginalCells = new Map<FrameId, Cell>();
+  const lowerOriginalCells = new Map<FrameId, Cell>();
+
+  for (const frame of frames) {
+    const upperCell = frame.cells[upperLayer.id];
+    const lowerCell = frame.cells[lowerLayer.id];
+    if (upperCell) upperOriginalCells.set(frame.id, cloneCell(upperCell));
+    if (lowerCell) lowerOriginalCells.set(frame.id, cloneCell(lowerCell));
+
+    // Composite: upper over lower using normal alpha-over blend
+    const upperData = resolveCell(frames, frames.indexOf(frame), upperLayer.id);
+    const lowerData = resolveCell(frames, frames.indexOf(frame), lowerLayer.id);
+
+    if (!upperData && !lowerData) continue;
+
+    const pixelCount = upperData?.length ?? lowerData?.length ?? 0;
+    if (!pixelCount) continue;
+    const out = lowerData ? new Uint8ClampedArray(lowerData) : new Uint8ClampedArray(pixelCount);
+
+    if (upperData) {
+      const upperOpacity = upperLayer.opacity;
+      const n = pixelCount >> 2;
+      for (let p = 0; p < n; p++) {
+        const i = p * 4;
+        const sa = (upperData[i + 3]! / 255) * upperOpacity;
+        if (sa === 0) continue;
+        const da = out[i + 3]! / 255;
+        const oa = sa + da * (1 - sa);
+        if (oa === 0) continue;
+        out[i]     = Math.round(((upperData[i]!     / 255) * sa + (out[i]!     / 255) * da * (1 - sa)) / oa * 255);
+        out[i + 1] = Math.round(((upperData[i + 1]! / 255) * sa + (out[i + 1]! / 255) * da * (1 - sa)) / oa * 255);
+        out[i + 2] = Math.round(((upperData[i + 2]! / 255) * sa + (out[i + 2]! / 255) * da * (1 - sa)) / oa * 255);
+        out[i + 3] = Math.round(oa * 255);
+      }
+    }
+    mergedCells.set(frame.id, { linked: false, data: out });
+  }
+
+  useHistoryStore.getState().execute(
+    new MergeDownCommand(
+      upperLayer,
+      lowerLayer,
+      upperIdx,
+      mergedCells,
+      lowerOriginalCells,
+      upperOriginalCells,
+      priorActive,
+      getDeps(),
+    ),
+  );
+}
+
 // ── helpers ────────────────────────────────────────────────────────────────
 
-function cloneCell(cell: Cell): Cell {
-  return cell.linked
-    ? { linked: true, data: null }
-    : { linked: false, data: cell.data ? new Uint8ClampedArray(cell.data) : null };
-}

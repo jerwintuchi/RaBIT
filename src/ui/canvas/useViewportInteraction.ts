@@ -1,15 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useUIStore } from '../../state/useUIStore';
 import { useToolStore } from '../../state/useToolStore';
-
-const ZOOM_LEVELS = [1, 2, 4, 8, 16, 32] as const;
-
-function snapZoom(current: number, direction: 'in' | 'out'): number {
-  if (direction === 'in') {
-    return ZOOM_LEVELS.find((z) => z > current) ?? 32;
-  }
-  return [...ZOOM_LEVELS].reverse().find((z) => z < current) ?? 1;
-}
+import { ZOOM_LEVELS, snapZoom } from '../../state/zoomLevels';
 
 export interface ViewportInteractionState {
   /** True while pan is active (space-drag or middle-drag) — tools should ignore pointer events. */
@@ -168,6 +160,11 @@ export function useViewportInteraction(
       if (e.code === 'Space') {
         isSpaceDown = false;
         el.style.cursor = savedCursor;
+        // If pan ends by releasing space (not pointer), release the input claim too
+        if (isPanning) {
+          isPanning = false;
+          inputClaimedRef.current = false;
+        }
       }
     };
 

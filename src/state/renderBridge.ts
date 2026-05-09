@@ -32,10 +32,26 @@ export function clearScratch(): void {
   _engine?.clearScratch();
 }
 
+export function setScratchErase(on: boolean): void {
+  _engine?.setScratchErase(on);
+}
+
+export function setActiveLayerOnEngine(id: string): void {
+  _engine?.setActiveLayer(id);
+}
+
 export function uploadLayerData(layerId: string, data: Uint8ClampedArray): void {
   _engine?.uploadLayerData(layerId, data);
 }
 
 export function readCompositePixel(canvasX: number, canvasY: number): [number, number, number, number] {
   return _engine?.readPixel(canvasX, canvasY) ?? [0, 0, 0, 0];
+}
+
+export function setOnionFrames(
+  prev: (Uint8ClampedArray | null)[],
+  next: (Uint8ClampedArray | null)[],
+  opacity: number,
+): void {
+  _engine?.setOnionFrames(prev, next, opacity);
 }

@@ -9,8 +9,8 @@
 /* SV square — saturation L→R, value B→T over a full-saturation hue base */
 .svSquare {
   position: relative;
-  width: 160px;
-  height: 160px;
+  width: 200px;
+  height: 200px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   cursor: crosshair;
@@ -35,7 +35,7 @@
 /* Hue bar */
 .hueBar {
   position: relative;
-  width: 160px;
+  width: 200px;
   height: 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
@@ -68,7 +68,7 @@
 /* Alpha bar — current opaque color over a checker pattern */
 .alphaBar {
   position: relative;
-  width: 160px;
+  width: 200px;
   height: 12px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
@@ -96,7 +96,7 @@
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-1);
-  width: 160px;
+  width: 200px;
 }
 
 .field {

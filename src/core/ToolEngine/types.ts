@@ -5,10 +5,13 @@ export type ToolId =
   | 'pencil'
   | 'eraser'
   | 'line'
+  | 'rectangle'
+  | 'ellipse'
   | 'fill'
   | 'eyedropper'
   | 'hand'
   | 'zoom'
+  | 'move'
   | 'marquee'
   | 'lasso'
   | 'magic-wand';
@@ -46,12 +49,25 @@ export interface ToolEngineContext {
   updateScratch(data: Uint8ClampedArray): void;
   /** Clear the scratch GPU texture. */
   clearScratch(): void;
+  /**
+   * When true, the scratch overlay uses DST_OUT blending so opaque scratch
+   * pixels "punch through" the composite to show the checkerboard — giving
+   * real-time eraser preview. Set false to restore normal SRC_OVER scratch.
+   */
+  setScratchErase(on: boolean): void;
 
   /** Push a Command onto the undo/redo stack. */
   executeCommand(cmd: Command): void;
 
   /** Notify the renderer that a layer's pixel buffer was mutated in place. */
   notifyLayerChanged(layerId: LayerId, data: Uint8ClampedArray): void;
+
+  /**
+   * Upload pixel data to the GPU for a layer WITHOUT touching the store or
+   * data-version counter. Used by move-mode preview so the selection pixels
+   * disappear from their original position while the user drags them.
+   */
+  previewLayerOnGPU(layerId: LayerId, data: Uint8ClampedArray): void;
 
   /** Zoom one step in/out, keeping the given canvas point fixed under the cursor. */
   zoomToward(canvasX: number, canvasY: number, direction: 'in' | 'out'): void;

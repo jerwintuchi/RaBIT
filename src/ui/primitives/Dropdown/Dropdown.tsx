@@ -55,7 +55,12 @@ export function Dropdown({
     if (!open || !triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const panelWidth = Math.max(rect.width, 120);
-    const top = rect.bottom + 2;
+    // Estimate panel height: 32px per option (max 8 visible) + optional filter row
+    const estimatedPanelH = Math.min(filtered.length, 8) * 32 + (showFilter ? 40 : 0);
+    const spaceBelow = window.innerHeight - rect.bottom - 4;
+    const spaceAbove = rect.top - 4;
+    const openUpward = spaceBelow < estimatedPanelH && spaceAbove > spaceBelow;
+    const top = openUpward ? rect.top - estimatedPanelH - 2 : rect.bottom + 2;
     const rawLeft = rect.left;
     const left = rawLeft + panelWidth > window.innerWidth ? rect.right - panelWidth : rawLeft;
 

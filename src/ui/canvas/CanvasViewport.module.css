@@ -39,3 +39,33 @@
   color: var(--text-secondary);
   min-width: 6ch;
 }
+
+/* Small tool icon displayed bottom-right of the pixel crosshair */
+.toolCursorIcon {
+  position: absolute;
+  pointer-events: none;
+  z-index: 21;
+  color: rgba(255, 255, 255, 0.9);
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
+  line-height: 0;
+}
+
+/* Marquee selection overlay — rendered via SVG in JSX for marching ants */
+.selectionOverlay {
+  position: absolute;
+  pointer-events: none;
+  z-index: 15;
+  overflow: visible;
+}
+
+/* Pixel-accurate crosshair — outlines the canvas pixel under the cursor */
+.pixelCrosshair {
+  position: absolute;
+  pointer-events: none;
+  box-sizing: border-box;
+  /* White inner ring visible on dark areas, dark outer ring visible on light */
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.65);
+  z-index: 20;
+  /* No transition — must track the cursor without lag */
+}

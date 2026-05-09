@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent } from 'react';
+import { useRef, useState, type PointerEvent } from 'react';
 import { usePaletteStore } from '../../../state/usePaletteStore';
 import {
   rgbToHsv,
@@ -23,6 +23,9 @@ export function HsvPicker(): JSX.Element {
   const lastHueRef = useRef(derivedH);
   if (s > 0) lastHueRef.current = derivedH;
   const h = lastHueRef.current;
+  // When s=0, changing hue doesn't change primaryColor so React won't re-render.
+  // This counter forces a re-render so the hue marker moves visually.
+  const [, forceHueRerender] = useState(0);
 
   const apply = (newH: number, newS: number, newV: number, newA: number) => {
     const rgb = hsvToRgb(newH, newS, newV);
@@ -58,6 +61,8 @@ export function HsvPicker(): JSX.Element {
     const newH = (x / rect.width) * 360;
     lastHueRef.current = newH;
     apply(newH, s, v, a);
+    // If s=0, primaryColor won't change so React won't re-render — force it so the marker moves
+    if (s === 0) forceHueRerender((n) => n + 1);
   });
   const alphaDrag = makeDragHandler((x, _y, rect) => {
     apply(h, s, v, Math.round((x / rect.width) * 255));

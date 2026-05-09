@@ -8,11 +8,12 @@ import styles from './LayerRow.module.css';
 interface LayerRowProps {
   layer: Layer;
   active: boolean;
+  selected: boolean;
   displayIdx: number;
   draggingDisplayIdx: number | null;
   dropDisplayIdx: number | null;
   dropOnTopHalf: boolean;
-  onSelect: () => void;
+  onSelect: (e: React.MouseEvent) => void;
   onDragStart: (displayIdx: number) => void;
   onDragOver: (e: React.DragEvent<HTMLElement>, displayIdx: number) => void;
   onDrop: () => void;
@@ -22,6 +23,7 @@ interface LayerRowProps {
 export function LayerRow({
   layer,
   active,
+  selected,
   displayIdx,
   draggingDisplayIdx,
   dropDisplayIdx,
@@ -77,6 +79,7 @@ export function LayerRow({
       className={[
         styles.row,
         active ? styles.active : '',
+        selected && !active ? styles.selected : '',
         isDraggingThis ? styles.dragging : '',
         showTopIndicator ? styles.dropTop : '',
         showBottomIndicator ? styles.dropBottom : '',

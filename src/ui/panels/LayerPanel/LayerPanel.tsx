@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
+import { LuMerge, LuCopy } from 'react-icons/lu';
 import type { BlendMode } from '../../../state/dataModelTypes';
 import { useLayerStore } from '../../../state/useLayerStore';
 import { layerActions } from '../../../state/action-composers';
-import { Slider, Dropdown, Tooltip } from '../../primitives';
+import { Dropdown, Tooltip } from '../../primitives';
 import { IconPlus, IconTrash } from '../../../assets/icons';
 import { LayerRow } from './LayerRow';
 import styles from './LayerPanel.module.css';
@@ -26,6 +27,41 @@ export function LayerPanel(): JSX.Element {
 
   // Display order is reverse of array order — top of UI = top of stack = end of array
   const displayLayers = useMemo(() => [...layers].reverse(), [layers]);
+
+  // Multi-select: set of layer IDs that are highlighted (beyond activeLayerId)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const handleRowSelect = useCallback(
+    (layerId: string, displayIdx: number, e: React.MouseEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        // Toggle this layer in the selection set; keep activeLayerId unchanged
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          if (next.has(layerId)) next.delete(layerId);
+          else next.add(layerId);
+          return next;
+        });
+      } else if (e.shiftKey && activeLayerId) {
+        // Range select from activeLayer to clicked layer (both in display coords)
+        const activeDisplayIdx = displayLayers.findIndex((l) => l.id === activeLayerId);
+        if (activeDisplayIdx === -1) {
+          setSelectedIds(new Set());
+          useLayerStore.getState().setActiveLayer(layerId);
+          return;
+        }
+        const lo = Math.min(activeDisplayIdx, displayIdx);
+        const hi = Math.max(activeDisplayIdx, displayIdx);
+        const rangeIds = new Set(displayLayers.slice(lo, hi + 1).map((l) => l.id));
+        setSelectedIds(rangeIds);
+        // Don't change activeLayerId on shift-click
+      } else {
+        // Normal click: clear selection and set active
+        setSelectedIds(new Set());
+        useLayerStore.getState().setActiveLayer(layerId);
+      }
+    },
+    [activeLayerId, displayLayers],
+  );
 
   // Drag-to-reorder state (display indices)
   const [dragSrc, setDragSrc] = useState<number | null>(null);
@@ -68,8 +104,46 @@ export function LayerPanel(): JSX.Element {
     onDragEnd();
   };
 
+  const onDuplicate = () => {
+    const toDup = selectedIds.size > 0 ? [...selectedIds] : activeLayerId ? [activeLayerId] : [];
+    // Sort by array order so duplicates are inserted in a sensible sequence
+    const sorted = toDup
+      .map((id) => ({ id, idx: layers.findIndex((l) => l.id === id) }))
+      .filter((x) => x.idx !== -1)
+      .sort((a, b) => a.idx - b.idx);
+    for (const { id } of sorted) {
+      layerActions.duplicateLayer(id);
+    }
+    setSelectedIds(new Set());
+  };
+
+  const canMergeDown = useMemo(() => {
+    if (!activeLayerId) return false;
+    const idx = layers.findIndex((l) => l.id === activeLayerId);
+    return idx > 0; // there is a layer below
+  }, [layers, activeLayerId]);
+
   const onDelete = () => {
-    if (activeLayerId) layerActions.removeLayer(activeLayerId);
+    // Delete all selected layers (or just the active one if no multi-select)
+    const toDelete = selectedIds.size > 0 ? [...selectedIds] : activeLayerId ? [activeLayerId] : [];
+    // Keep at least one layer
+    const deletable = toDelete.filter((id) => {
+      const remaining = layers.length - toDelete.length;
+      return remaining > 0 && layers.some((l) => l.id === id);
+    });
+    // Remove in reverse array-order so indices stay valid
+    const sorted = deletable
+      .map((id) => ({ id, idx: layers.findIndex((l) => l.id === id) }))
+      .filter((x) => x.idx !== -1)
+      .sort((a, b) => b.idx - a.idx);
+    // Refuse if it would empty the list
+    if (sorted.length >= layers.length) {
+      sorted.pop(); // keep one
+    }
+    for (const { id } of sorted) {
+      layerActions.removeLayer(id);
+    }
+    setSelectedIds(new Set());
   };
 
   return (
@@ -85,6 +159,28 @@ export function LayerPanel(): JSX.Element {
               onClick={() => layerActions.addLayer()}
             >
               <IconPlus />
+            </button>
+          </Tooltip>
+          <Tooltip content="Duplicate layer(s)" placement="left">
+            <button
+              type="button"
+              className={styles.headerButton}
+              aria-label="Duplicate layer"
+              disabled={!activeLayerId}
+              onClick={onDuplicate}
+            >
+              <LuCopy size={14} />
+            </button>
+          </Tooltip>
+          <Tooltip content="Merge down" placement="left">
+            <button
+              type="button"
+              className={styles.headerButton}
+              aria-label="Merge down"
+              disabled={!canMergeDown}
+              onClick={() => { if (activeLayerId) layerActions.mergeDown(activeLayerId); }}
+            >
+              <LuMerge size={14} />
             </button>
           </Tooltip>
           <Tooltip content="Delete layer" placement="left">
@@ -107,11 +203,12 @@ export function LayerPanel(): JSX.Element {
             key={layer.id}
             layer={layer}
             active={layer.id === activeLayerId}
+            selected={selectedIds.has(layer.id)}
             displayIdx={displayIdx}
             draggingDisplayIdx={dragSrc}
             dropDisplayIdx={dropInfo?.idx ?? null}
             dropOnTopHalf={dropInfo?.topHalf ?? false}
-            onSelect={() => useLayerStore.getState().setActiveLayer(layer.id)}
+            onSelect={(e) => handleRowSelect(layer.id, displayIdx, e)}
             onDragStart={onRowDragStart}
             onDragOver={onRowDragOver}
             onDrop={onDrop}
@@ -135,16 +232,18 @@ export function LayerPanel(): JSX.Element {
         </div>
         <div className={styles.footerRow}>
           <span className={styles.footerLabel}>Opacity</span>
-          <Slider
-            value={Math.round((activeLayer?.opacity ?? 1) * 100)}
+          <input
+            type="range"
+            className={styles.opacitySlider}
             min={0}
             max={100}
             step={1}
-            showValue={false}
+            value={Math.round((activeLayer?.opacity ?? 1) * 100)}
             disabled={!activeLayer}
             aria-label="Layer opacity"
-            onChange={(v) => {
-              if (activeLayer) layerActions.setLayerOpacity(activeLayer.id, v / 100);
+            style={{ '--pct': Math.round((activeLayer?.opacity ?? 1) * 100) } as React.CSSProperties}
+            onChange={(e) => {
+              if (activeLayer) layerActions.setLayerOpacity(activeLayer.id, e.target.valueAsNumber / 100);
             }}
           />
           <span className={styles.footerValue}>

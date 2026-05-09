@@ -185,6 +185,66 @@ export class RenameLayerCommand extends PatchLayerCommand {
   }
 }
 
+// ── Merge down ─────────────────────────────────────────────────────────────
+
+/**
+ * Composites the upper layer onto the lower layer for every frame, then
+ * removes the upper layer. Fully reversible: undo restores both layers' cells
+ * and re-inserts the upper layer at its original index.
+ */
+export class MergeDownCommand implements Command {
+  readonly id = nanoid(12);
+  readonly description: string;
+
+  constructor(
+    /** The upper (active) layer that will be removed. */
+    private readonly upperLayer: Layer,
+    /** The lower (target) layer whose cells will receive the composite. */
+    private readonly lowerLayer: Layer,
+    /** Index of upperLayer in layers[] before merge. */
+    private readonly upperIndex: number,
+    /** Map of frameId → new composited cell for lowerLayer. */
+    private readonly mergedCells: Map<FrameId, Cell>,
+    /** Original cells of lowerLayer before merge (for undo). */
+    private readonly lowerOriginalCells: Map<FrameId, Cell>,
+    /** Original cells of upperLayer (for undo). */
+    private readonly upperOriginalCells: Map<FrameId, Cell>,
+    private readonly priorActiveLayerId: LayerId | null,
+    private readonly deps: LayerCommandDeps,
+  ) {
+    this.description = `Merge down "${upperLayer.name}" → "${lowerLayer.name}"`;
+  }
+
+  execute(): void {
+    // Write composited data into lower layer cells
+    for (const [frameId, cell] of this.mergedCells) {
+      this.deps.setCell(frameId, this.lowerLayer.id, cell);
+    }
+    // Remove upper layer and its cells
+    for (const frameId of this.upperOriginalCells.keys()) {
+      this.deps.removeCell(frameId, this.upperLayer.id);
+    }
+    this.deps.removeLayer(this.upperLayer.id);
+    this.deps.invalidateLayerTexture(this.upperLayer.id);
+    this.deps.setActiveLayer(this.lowerLayer.id);
+    this.deps.notifyLayerListChanged();
+  }
+
+  undo(): void {
+    // Restore lower layer's original cells
+    for (const [frameId, cell] of this.lowerOriginalCells) {
+      this.deps.setCell(frameId, this.lowerLayer.id, cell);
+    }
+    // Re-insert upper layer at its original index with its original cells
+    this.deps.insertLayer(this.upperLayer, this.upperIndex);
+    for (const [frameId, cell] of this.upperOriginalCells) {
+      this.deps.setCell(frameId, this.upperLayer.id, cell);
+    }
+    this.deps.setActiveLayer(this.priorActiveLayerId);
+    this.deps.notifyLayerListChanged();
+  }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /** Re-export for external callers building commands from the state layer. */

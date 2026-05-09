@@ -1,0 +1,505 @@
+.timeline {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-1);
+  border-top: 1px solid var(--border-subtle);
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ── Controls row ─────────────────────────────────────────────────────────── */
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  height: 38px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-2);
+}
+
+.separator {
+  width: 1px;
+  height: 18px;
+  background: var(--border-subtle);
+  margin: 0 var(--space-1);
+}
+
+.transportBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  transition: background 80ms, color 80ms;
+}
+
+.transportBtn:hover {
+  background: var(--bg-3);
+  color: var(--text-primary);
+}
+
+.transportBtn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.fpsLabel {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.fpsInput {
+  width: 40px;
+  height: 24px;
+  background: var(--bg-0);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-align: center;
+  padding: 0 2px;
+}
+
+.fpsInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.loopLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.onionLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.onionCount {
+  width: 30px;
+  height: 24px;
+  background: var(--bg-0);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-align: center;
+  padding: 0;
+}
+
+.onionCount:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.frameCounter {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* ── Body: layer labels + frame grid ─────────────────────────────────────── */
+
+.body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.layerLabels {
+  flex-shrink: 0;
+  width: 140px;
+  overflow-y: hidden;
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+}
+
+.layerLabelsHeader {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-2);
+  flex-shrink: 0;
+}
+
+.layerLabelsHeader span {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.layerLabelsList {
+  flex: 1;
+  overflow-y: hidden;
+}
+
+.layerLabelRow {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  gap: var(--space-1);
+  cursor: pointer;
+  transition: background 80ms;
+}
+
+.layerLabelRow:hover {
+  background: var(--bg-2);
+}
+
+.layerLabelRow span {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Active layer — full row highlight spanning the label column */
+.layerLabelRow.activeLayer {
+  background: color-mix(in srgb, var(--accent-muted) 55%, transparent);
+}
+
+.layerLabelRow.activeLayer:hover {
+  background: color-mix(in srgb, var(--accent-muted) 70%, transparent);
+}
+
+.layerLabelRow.activeLayer span {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.layerLockBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.layerLockBtn:hover {
+  color: var(--text-primary);
+  background: var(--bg-3);
+}
+
+.layerLockBtn.locked {
+  color: var(--accent-warning, var(--accent-primary));
+}
+
+.layerLockBtn svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ── Frame grid ───────────────────────────────────────────────────────────── */
+
+.frameGrid {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.frameHeaders {
+  display: flex;
+  height: 32px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-2);
+}
+
+.frameHeader {
+  flex-shrink: 0;
+  width: 76px;
+  height: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background 80ms;
+  position: relative;
+}
+
+.frameHeader:hover {
+  background: var(--bg-3);
+}
+
+.frameHeader.activeCol {
+  background: var(--accent-muted);
+}
+
+.frameHeader.selectedCol {
+  background: color-mix(in srgb, var(--accent-muted) 50%, transparent);
+}
+
+.frameNum {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+.frameDur {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  line-height: 1.2;
+}
+
+/* Delete button — top-right, appears on hover */
+.frameDeleteBtn {
+  display: none;
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-3);
+  border: none;
+  border-radius: 2px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.frameHeader:hover .frameDeleteBtn {
+  display: flex;
+}
+
+.frameDeleteBtn:hover {
+  background: var(--accent-danger, #c0392b);
+  color: #fff;
+}
+
+/* Duplicate button — top-left, appears on hover */
+.frameDupBtn {
+  display: none;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-3);
+  border: none;
+  border-radius: 2px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.frameHeader:hover .frameDupBtn {
+  display: flex;
+}
+
+.frameDupBtn:hover {
+  background: var(--accent-primary, #4a9eff);
+  color: #fff;
+}
+
+/* Add-frame placeholder at the end of the header strip */
+.addFrameCell {
+  flex-shrink: 0;
+  width: 76px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--border-subtle);
+  border-left: 2px dashed var(--border-subtle);
+  cursor: pointer;
+  color: var(--text-tertiary);
+  transition: background 80ms, color 80ms, border-color 80ms;
+}
+
+.addFrameCell:hover {
+  background: color-mix(in srgb, var(--accent-primary, #4a9eff) 12%, transparent);
+  color: var(--accent-primary, #4a9eff);
+  border-left-color: var(--accent-primary, #4a9eff);
+}
+
+/* Empty spacer matching addFrameCell width — keeps row columns aligned */
+.addFrameSpacer {
+  flex-shrink: 0;
+  width: 76px;
+  height: 64px;
+  border-left: 2px dashed var(--border-subtle);
+}
+
+.frameRows {
+  flex: 1;
+  overflow-y: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.frameRow {
+  display: flex;
+  height: 64px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Active layer row highlight — same tint as label column */
+.frameRow.activeLayerRow {
+  background: color-mix(in srgb, var(--accent-muted) 20%, transparent);
+}
+
+.frameCell {
+  flex-shrink: 0;
+  width: 76px;
+  height: 64px;
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: background 80ms;
+  overflow: hidden;
+}
+
+.frameCell:hover {
+  background: var(--bg-3);
+}
+
+/* Active frame column */
+.frameCell.activeCol {
+  background: color-mix(in srgb, var(--accent-muted) 55%, transparent);
+}
+
+/* Active frame column on the active layer row — extra emphasis */
+.frameRow.activeLayerRow .frameCell.activeCol {
+  background: color-mix(in srgb, var(--accent-muted) 80%, transparent);
+}
+
+/* Selected (multi-select) frame column */
+.frameCell.selectedCol {
+  background: color-mix(in srgb, var(--accent-muted) 30%, transparent);
+}
+
+/* Checkerboard background for thumbnail — shows through transparent pixels */
+.frameCellThumb {
+  width: 60px;
+  height: 60px;
+  image-rendering: pixelated;
+  object-fit: contain;
+  background-image: repeating-conic-gradient(#444 0% 25%, #2c2c2c 0% 50%);
+  background-size: 6px 6px;
+}
+
+.frameCellLinked {
+  color: var(--text-tertiary);
+}
+
+.frameCellEmpty {
+  width: 32px;
+  height: 32px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 2px;
+}
+
+/* ── Frame add button (end of header row) ─────────────────────────────────── */
+
+.addFrameBtn {
+  flex-shrink: 0;
+  width: 76px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color 80ms, background 80ms;
+}
+
+.addFrameBtn:hover {
+  color: var(--text-primary);
+  background: var(--bg-3);
+}
+
+/* ── Scrollbar styling ────────────────────────────────────────────────────── */
+
+.frameGrid::-webkit-scrollbar {
+  height: 6px;
+}
+
+.frameGrid::-webkit-scrollbar-track {
+  background: var(--bg-1);
+}
+
+.frameGrid::-webkit-scrollbar-thumb {
+  background: var(--border-default, #444);
+  border-radius: 3px;
+}
+
+.frameGrid::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* ── Drag-and-drop ────────────────────────────────────────────────────────── */
+
+/* Vertical drop-position indicator between frame columns */
+.dropIndicator {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: var(--accent-primary);
+  pointer-events: none;
+  z-index: 10;
+  transform: translateX(-1px);
+}
+
+/* Source frame(s) being dragged — dimmed to signal they're in motion */
+.draggingCol {
+  opacity: 0.4;
+}
