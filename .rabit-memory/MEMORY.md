@@ -25,6 +25,9 @@
 ## Agents & Skills
 - [Agents & Skills Map](agents-and-skills.md) — when to invoke subagents/skills proactively per phase and task type
 
+## Bug Fix History
+- [Bug Fix History](bug-fix-history.md) — all bugs encountered and fixed; root causes, fixes, and rules to prevent recurrence. **Read before debugging any rendering, shader, or UI issue.**
+
 ## Known Risks & Constraints
 - [Legal & Licensing](risks/legal.md) — library licenses, format patents, Aseprite differentiation
 - [Performance Budgets](risks/performance.md) — canvas size limits, frame rate targets
