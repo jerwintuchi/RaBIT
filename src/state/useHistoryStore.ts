@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { CommandManager } from '../core/CommandSystem';
 import type { Command } from '../core/CommandSystem';
+import { perfMark, perfMeasure } from '../core/perfProbe';
 
 interface HistoryState {
   // Expose stack lengths reactively so UI re-renders when stacks change
@@ -43,11 +44,15 @@ export const useHistoryStore = create<HistoryState>()((set, get) => {
     },
 
     undo() {
+      perfMark();
       get().manager.undo();
+      perfMeasure('undo');
     },
 
     redo() {
+      perfMark();
       get().manager.redo();
+      perfMeasure('redo');
     },
 
     canUndo() {

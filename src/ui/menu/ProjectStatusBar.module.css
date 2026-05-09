@@ -1,0 +1,66 @@
+.root {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  pointer-events: none;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 480px;
+}
+
+.dirtyDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.dirtyDot.visible {
+  opacity: 1;
+}
+
+.name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  max-width: 180px;
+}
+
+.sep {
+  color: var(--fg-3);
+  font-size: 11px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.path {
+  font-size: 11px;
+  color: var(--fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.savedAt {
+  font-size: 11px;
+  color: var(--fg-3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}

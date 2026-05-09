@@ -1,0 +1,10 @@
+.bar {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 var(--spacing-2);
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border-subtle);
+  user-select: none;
+  flex-shrink: 0;
+}

@@ -7,3 +7,5 @@ export { useToolStore } from './useToolStore';
 export type { ToolId, ToolOptions, SelectionMask, PencilOptions, EraserOptions, FillOptions, LineOptions, ZoomOptions } from './useToolStore';
 export { useUIStore } from './useUIStore';
 export type { Theme, PanelLayout } from './useUIStore';
+export { usePrefsStore, DEFAULT_KEYBINDINGS, applyUiScale, findConflict } from './usePrefsStore';
+export type { UiScale } from './usePrefsStore';

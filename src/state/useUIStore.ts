@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { nanoid } from 'nanoid';
+import { ZOOM_LEVELS } from './zoomLevels';
+import type { RecentFileEntry } from '../bridge/projectIpc';
 
 export type Theme = 'dark'; // v1 only supports dark
 
@@ -11,15 +14,73 @@ export interface PanelLayout {
   palettePanelVisible: boolean;
 }
 
+export type UnsavedIntent = 'new' | 'open' | 'close';
+
+export interface Toast {
+  id: string;
+  message: string;
+  variant: 'info' | 'error' | 'warning';
+}
+
 interface UIState {
   theme: Theme;
   panels: PanelLayout;
-  zoomLevel: number; // 1, 2, 4, 8, 16, 32
+  zoomLevel: number;
   panOffset: { x: number; y: number };
-  cursorPosition: { x: number; y: number } | null; // canvas pixel coords
+  cursorPosition: { x: number; y: number } | null;
   showCheckerboard: boolean;
   showGrid: boolean;
   showPixelGrid: boolean;
+  onionSkin: {
+    enabled: boolean;
+    before: number;
+    after: number;
+    opacity: number;
+  };
+
+  // ── M9: File I/O UI state ───────────────────────────────────────────────
+
+  unsavedChangesDialog: {
+    open: boolean;
+    intent: UnsavedIntent | null;
+    pendingPath: string | null;
+  };
+
+  externalChangeDialog: {
+    open: boolean;
+    changedPath: string | null;
+  };
+
+  newProjectDialog: {
+    open: boolean;
+  };
+
+  resizeCanvasDialog: {
+    open: boolean;
+  };
+
+  crashRecoveryDialog: {
+    open: boolean;
+    savedAt: number | null;
+    projectName: string | null;
+  };
+
+  exportDialog: {
+    open: boolean;
+  };
+
+  prefsDialog: {
+    open: boolean;
+  };
+
+  welcomeScreen: {
+    visible: boolean;
+  };
+
+  recentFiles: RecentFileEntry[];
+  toasts: Toast[];
+
+  // ── Actions ─────────────────────────────────────────────────────────────
 
   setTheme(theme: Theme): void;
   setPanels(patch: Partial<PanelLayout>): void;
@@ -30,17 +91,42 @@ interface UIState {
   setShowCheckerboard(v: boolean): void;
   setShowGrid(v: boolean): void;
   setShowPixelGrid(v: boolean): void;
+  setOnionSkin(patch: Partial<UIState['onionSkin']>): void;
   resetView(): void;
+
+  showUnsavedChangesDialog(intent: UnsavedIntent, pendingPath?: string): void;
+  hideUnsavedChangesDialog(): void;
+
+  showExternalChangeDialog(path: string): void;
+  hideExternalChangeDialog(): void;
+
+  showNewProjectDialog(): void;
+  hideNewProjectDialog(): void;
+
+  showResizeCanvasDialog(): void;
+  hideResizeCanvasDialog(): void;
+
+  showCrashRecoveryDialog(savedAt: number, projectName: string): void;
+  hideCrashRecoveryDialog(): void;
+
+  showExportDialog(): void;
+  hideExportDialog(): void;
+
+  showPrefsDialog(): void;
+  hidePrefsDialog(): void;
+
+  setWelcomeVisible(v: boolean): void;
+  setRecentFiles(files: RecentFileEntry[]): void;
+
+  addToast(message: string, variant?: Toast['variant']): void;
+  removeToast(id: string): void;
 }
 
-const VALID_ZOOM_LEVELS = [1, 2, 4, 8, 16, 32] as const;
-
 function clampZoom(z: number): number {
-  const sorted = [...VALID_ZOOM_LEVELS].sort((a, b) => a - b);
-  for (const level of sorted) {
+  for (const level of ZOOM_LEVELS) {
     if (z <= level) return level;
   }
-  return sorted[sorted.length - 1] ?? 1;
+  return ZOOM_LEVELS[ZOOM_LEVELS.length - 1] ?? 1;
 }
 
 export const useUIStore = create<UIState>()(
@@ -59,59 +145,57 @@ export const useUIStore = create<UIState>()(
     showCheckerboard: true,
     showGrid: false,
     showPixelGrid: false,
+    onionSkin: { enabled: false, before: 1, after: 1, opacity: 0.5 },
+
+    unsavedChangesDialog: { open: false, intent: null, pendingPath: null },
+    externalChangeDialog: { open: false, changedPath: null },
+    newProjectDialog: { open: false },
+    resizeCanvasDialog: { open: false },
+    crashRecoveryDialog: { open: false, savedAt: null, projectName: null },
+    exportDialog: { open: false },
+    prefsDialog: { open: false },
+    welcomeScreen: { visible: false },
+    recentFiles: [],
+    toasts: [],
 
     setTheme(theme) {
-      set((s) => {
-        s.theme = theme;
-      });
+      set((s) => { s.theme = theme; });
     },
 
     setPanels(patch) {
-      set((s) => {
-        Object.assign(s.panels, patch);
-      });
+      set((s) => { Object.assign(s.panels, patch); });
     },
 
     togglePanel(key) {
-      set((s) => {
-        s.panels[key] = !s.panels[key];
-      });
+      set((s) => { s.panels[key] = !s.panels[key]; });
     },
 
     setZoomLevel(zoom) {
-      set((s) => {
-        s.zoomLevel = clampZoom(zoom);
-      });
+      set((s) => { s.zoomLevel = clampZoom(zoom); });
     },
 
     setPanOffset(offset) {
-      set((s) => {
-        s.panOffset = offset;
-      });
+      set((s) => { s.panOffset = offset; });
     },
 
     setCursorPosition(pos) {
-      set((s) => {
-        s.cursorPosition = pos;
-      });
+      set((s) => { s.cursorPosition = pos; });
     },
 
     setShowCheckerboard(v) {
-      set((s) => {
-        s.showCheckerboard = v;
-      });
+      set((s) => { s.showCheckerboard = v; });
     },
 
     setShowGrid(v) {
-      set((s) => {
-        s.showGrid = v;
-      });
+      set((s) => { s.showGrid = v; });
     },
 
     setShowPixelGrid(v) {
-      set((s) => {
-        s.showPixelGrid = v;
-      });
+      set((s) => { s.showPixelGrid = v; });
+    },
+
+    setOnionSkin(patch) {
+      set((s) => { Object.assign(s.onionSkin, patch); });
     },
 
     resetView() {
@@ -120,5 +204,100 @@ export const useUIStore = create<UIState>()(
         s.panOffset = { x: 0, y: 0 };
       });
     },
+
+    showUnsavedChangesDialog(intent, pendingPath) {
+      set((s) => {
+        s.unsavedChangesDialog = { open: true, intent, pendingPath: pendingPath ?? null };
+      });
+    },
+
+    hideUnsavedChangesDialog() {
+      set((s) => {
+        s.unsavedChangesDialog = { open: false, intent: null, pendingPath: null };
+      });
+    },
+
+    showExternalChangeDialog(path) {
+      set((s) => {
+        s.externalChangeDialog = { open: true, changedPath: path };
+      });
+    },
+
+    hideExternalChangeDialog() {
+      set((s) => {
+        s.externalChangeDialog = { open: false, changedPath: null };
+      });
+    },
+
+    showNewProjectDialog() {
+      set((s) => { s.newProjectDialog.open = true; });
+    },
+
+    hideNewProjectDialog() {
+      set((s) => { s.newProjectDialog.open = false; });
+    },
+
+    showResizeCanvasDialog() {
+      set((s) => { s.resizeCanvasDialog.open = true; });
+    },
+
+    hideResizeCanvasDialog() {
+      set((s) => { s.resizeCanvasDialog.open = false; });
+    },
+
+    showCrashRecoveryDialog(savedAt, projectName) {
+      set((s) => {
+        s.crashRecoveryDialog = { open: true, savedAt, projectName };
+      });
+    },
+
+    hideCrashRecoveryDialog() {
+      set((s) => {
+        s.crashRecoveryDialog = { open: false, savedAt: null, projectName: null };
+      });
+    },
+
+    showExportDialog() {
+      set((s) => { s.exportDialog.open = true; });
+    },
+
+    hideExportDialog() {
+      set((s) => { s.exportDialog.open = false; });
+    },
+
+    showPrefsDialog() {
+      set((s) => { s.prefsDialog.open = true; });
+    },
+
+    hidePrefsDialog() {
+      set((s) => { s.prefsDialog.open = false; });
+    },
+
+    setWelcomeVisible(v) {
+      set((s) => { s.welcomeScreen.visible = v; });
+    },
+
+    setRecentFiles(files) {
+      set((s) => { s.recentFiles = files; });
+    },
+
+    addToast(message, variant = 'info') {
+      set((s) => {
+        s.toasts.push({ id: nanoid(8), message, variant });
+      });
+    },
+
+    removeToast(id) {
+      set((s) => {
+        s.toasts = s.toasts.filter((t) => t.id !== id);
+      });
+    },
   })),
 );
+
+/** Convenience helper — call from anywhere without importing the store. */
+export const toast = {
+  info: (msg: string) => useUIStore.getState().addToast(msg, 'info'),
+  error: (msg: string) => useUIStore.getState().addToast(msg, 'error'),
+  warning: (msg: string) => useUIStore.getState().addToast(msg, 'warning'),
+};

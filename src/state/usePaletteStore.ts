@@ -95,7 +95,6 @@ export const usePaletteStore = create<PaletteState>()(
 
     pushColorHistory(color) {
       set((s) => {
-        // Remove duplicate if already present, then prepend
         const filtered = s.colorHistory.filter((c) => c !== color);
         s.colorHistory = [color, ...filtered].slice(0, MAX_HISTORY);
       });

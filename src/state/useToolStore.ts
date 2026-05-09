@@ -5,10 +5,13 @@ export type ToolId =
   | 'pencil'
   | 'eraser'
   | 'line'
+  | 'rectangle'
+  | 'ellipse'
   | 'fill'
   | 'eyedropper'
   | 'hand'
   | 'zoom'
+  | 'move'
   | 'marquee'
   | 'lasso'
   | 'magic-wand';
@@ -45,6 +48,9 @@ export type ToolOptions = {
   zoom: ZoomOptions;
   eyedropper: Record<string, never>;
   hand: Record<string, never>;
+  rectangle: Record<string, never>;
+  ellipse: Record<string, never>;
+  move: Record<string, never>;
   marquee: Record<string, never>;
   lasso: Record<string, never>;
   'magic-wand': { tolerance: number };
@@ -55,6 +61,10 @@ export interface SelectionMask {
   data: Uint8ClampedArray; // 1-bit per pixel in a byte array
   width: number;
   height: number;
+  /** Canvas-space bounding rect of the selection (for overlay rendering). */
+  bounds: { x: number; y: number; w: number; h: number };
+  /** When true, tools operate OUTSIDE the mask rather than inside. */
+  inverted?: boolean;
 }
 
 interface ToolState {
@@ -68,6 +78,7 @@ interface ToolState {
   updateOptions<T extends ToolId>(tool: T, patch: Partial<ToolOptions[T]>): void;
   setSelection(mask: SelectionMask | null): void;
   clearSelection(): void;
+  invertSelection(): void;
 }
 
 const defaultOptions: ToolOptions = {
@@ -78,10 +89,32 @@ const defaultOptions: ToolOptions = {
   zoom: { mode: 'in' },
   eyedropper: {},
   hand: {},
+  rectangle: {},
+  ellipse: {},
+  move: {},
   marquee: {},
   lasso: {},
   'magic-wand': { tolerance: 32 },
 };
+
+/**
+ * Returns true if (x, y) is within the active selection, or if there is no selection.
+ * Uses the per-pixel mask when available; falls back to bounds-only for draft marquee drags.
+ */
+export function isInSelection(sel: SelectionMask | null, x: number, y: number): boolean {
+  if (!sel) return true;
+  let inside: boolean;
+  if (x < sel.bounds.x || y < sel.bounds.y ||
+      x >= sel.bounds.x + sel.bounds.w ||
+      y >= sel.bounds.y + sel.bounds.h) {
+    inside = false;
+  } else if (sel.data.length > 1) {
+    inside = sel.data[y * sel.width + x] === 1;
+  } else {
+    inside = true;
+  }
+  return sel.inverted ? !inside : inside;
+}
 
 export const useToolStore = create<ToolState>()(
   immer((set) => ({
@@ -117,6 +150,12 @@ export const useToolStore = create<ToolState>()(
     clearSelection() {
       set((s) => {
         s.selection = null;
+      });
+    },
+
+    invertSelection() {
+      set((s) => {
+        if (s.selection) s.selection.inverted = !s.selection.inverted;
       });
     },
   })),

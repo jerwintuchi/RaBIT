@@ -19,7 +19,7 @@ interface ProjectState {
   meta: ProjectMeta;
   canvas: CanvasConfig;
 
-  setName(name: string): void;
+  setName(name: string, markDirty?: boolean): void;
   setFilePath(path: string | null): void;
   setDirty(dirty: boolean): void;
   markSaved(): void;
@@ -46,10 +46,10 @@ export const useProjectStore = create<ProjectState>()(
     },
     canvas: makeCanvasConfig(32, 32),
 
-    setName(name) {
+    setName(name, markDirty = true) {
       set((s) => {
         s.meta.name = name;
-        s.meta.dirty = true;
+        if (markDirty) s.meta.dirty = true;
       });
     },
 

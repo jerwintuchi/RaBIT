@@ -1,0 +1,141 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+}
+
+.card {
+  background: var(--bg-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  width: 400px;
+  overflow: hidden;
+}
+
+.header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.icon svg {
+  display: block;
+}
+
+.headingGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-0);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 12px;
+  color: var(--fg-3);
+  margin: 0;
+}
+
+.body {
+  padding: 16px 24px;
+}
+
+.infoRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.infoLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-3);
+}
+
+.infoValue {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-1);
+}
+
+.infoSub {
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+.description {
+  font-size: 12px;
+  color: var(--fg-2);
+  line-height: 1.6;
+  margin: 12px 0 0;
+}
+
+.footer {
+  padding: 14px 24px;
+  background: var(--bg-1);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 7px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 100ms ease, border-color 100ms ease;
+}
+
+.btnDiscard {
+  background: transparent;
+  border-color: var(--border-subtle);
+  color: var(--fg-2);
+}
+
+.btnDiscard:hover {
+  background: var(--bg-3);
+  color: var(--fg-1);
+}
+
+.btnRestore {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btnRestore:hover {
+  filter: brightness(1.1);
+}

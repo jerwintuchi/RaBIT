@@ -1,0 +1,252 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+}
+
+.card {
+  background: var(--bg-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  width: 480px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Tabs ── */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-1);
+}
+
+.tab {
+  flex: 1;
+  padding: 10px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 100ms, border-color 100ms;
+}
+
+.tab:hover {
+  color: var(--fg-1);
+}
+
+.tabActive {
+  color: var(--fg-0);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Body ── */
+.body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  max-height: 480px;
+}
+
+/* ── Field rows ── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--fg-3);
+}
+
+/* ── Radio group ── */
+.radioGroup {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.radioBtn {
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-3);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: background 80ms, border-color 80ms, color 80ms;
+}
+
+.radioBtn:hover {
+  color: var(--fg-1);
+  border-color: var(--fg-3);
+}
+
+.radioBtnActive {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: var(--accent);
+  color: var(--fg-0);
+}
+
+/* ── Scale button group ── */
+.scaleGroup {
+  display: flex;
+  gap: 4px;
+}
+
+.scaleBtn {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-3);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: background 80ms, border-color 80ms, color 80ms;
+}
+
+.scaleBtn:hover { color: var(--fg-1); }
+
+.scaleBtnActive {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: var(--accent);
+  color: var(--fg-0);
+}
+
+/* ── Checkbox row ── */
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--fg-2);
+  cursor: pointer;
+}
+
+.checkRow input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 14px;
+  height: 14px;
+}
+
+/* ── Number input ── */
+.numInput {
+  width: 72px;
+  padding: 5px 8px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--fg-1);
+  font-size: 12px;
+}
+
+.numInput:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ── Path picker ── */
+.pathRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pathDisplay {
+  flex: 1;
+  padding: 5px 10px;
+  background: var(--bg-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+.pathBtn {
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-3);
+  color: var(--fg-2);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pathBtn:hover { color: var(--fg-1); }
+
+/* ── Progress bar ── */
+.progressWrap {
+  height: 3px;
+  background: var(--bg-1);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.progressBar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 150ms ease;
+}
+
+/* ── Footer ── */
+.footer {
+  padding: 14px 24px;
+  background: var(--bg-1);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.footerSpacer { flex: 1; }
+
+.btn {
+  padding: 7px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btnCancel {
+  background: transparent;
+  border-color: var(--border-subtle);
+  color: var(--fg-2);
+}
+
+.btnCancel:hover { background: var(--bg-3); color: var(--fg-1); }
+
+.btnExport {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btnExport:hover { filter: brightness(1.1); }
+.btnExport:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }

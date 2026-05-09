@@ -1,0 +1,92 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card {
+  background: var(--bg-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  width: 380px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header strip ─────────────────────────────────── */
+.header {
+  padding: 20px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.title {
+  font-size: var(--text-base, 14px);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.message {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* ── Footer / actions ────────────────────────────── */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 24px;
+  background: var(--bg-1);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Shared button base */
+.btn {
+  border-radius: var(--radius-sm);
+  padding: 8px 18px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background 100ms, color 100ms, opacity 100ms;
+}
+
+.btnCancel {
+  background: none;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+}
+
+.btnCancel:hover {
+  background: var(--bg-3);
+  color: var(--text-primary);
+}
+
+.btnDiscard {
+  background: none;
+  border: 1px solid var(--color-error, #e05555);
+  color: var(--color-error, #e05555);
+}
+
+.btnDiscard:hover {
+  background: rgba(224, 85, 85, 0.1);
+}
+
+.btnSave {
+  background: var(--accent-primary);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+}
+
+.btnSave:hover { opacity: 0.88; }
