@@ -32,6 +32,6 @@ export function perfMeasure(label: string): void {
     const p50 = sorted[Math.floor(sorted.length * 0.5)]!.toFixed(2);
     const p99 = sorted[Math.floor(sorted.length * 0.99)]!.toFixed(2);
     const avg = (r.reduce((a, b) => a + b, 0) / r.length).toFixed(2);
-    console.log(`[RaBIT perf] ${label} — n=${r.length}  avg=${avg}ms  p50=${p50}ms  p99=${p99}ms`);
+    console.warn(`[RaBIT perf] ${label} — n=${r.length}  avg=${avg}ms  p50=${p50}ms  p99=${p99}ms`);
   }
 }

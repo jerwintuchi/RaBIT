@@ -1,5 +1,9 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
+import { isInSelection } from '../core/ToolEngine/types';
+import type { SelectionMask } from '../core/ToolEngine/types';
+export type { SelectionMask } from '../core/ToolEngine/types';
+export { isInSelection };
 
 export type ToolId =
   | 'pencil'
@@ -56,17 +60,6 @@ export type ToolOptions = {
   'magic-wand': { tolerance: number };
 };
 
-// Minimal SelectionMask — will be fleshed out in M14 (P1)
-export interface SelectionMask {
-  data: Uint8ClampedArray; // 1-bit per pixel in a byte array
-  width: number;
-  height: number;
-  /** Canvas-space bounding rect of the selection (for overlay rendering). */
-  bounds: { x: number; y: number; w: number; h: number };
-  /** When true, tools operate OUTSIDE the mask rather than inside. */
-  inverted?: boolean;
-}
-
 interface ToolState {
   activeTool: ToolId;
   previousTool: ToolId | null; // for Space-held hand-tool restore
@@ -97,24 +90,7 @@ const defaultOptions: ToolOptions = {
   'magic-wand': { tolerance: 32 },
 };
 
-/**
- * Returns true if (x, y) is within the active selection, or if there is no selection.
- * Uses the per-pixel mask when available; falls back to bounds-only for draft marquee drags.
- */
-export function isInSelection(sel: SelectionMask | null, x: number, y: number): boolean {
-  if (!sel) return true;
-  let inside: boolean;
-  if (x < sel.bounds.x || y < sel.bounds.y ||
-      x >= sel.bounds.x + sel.bounds.w ||
-      y >= sel.bounds.y + sel.bounds.h) {
-    inside = false;
-  } else if (sel.data.length > 1) {
-    inside = sel.data[y * sel.width + x] === 1;
-  } else {
-    inside = true;
-  }
-  return sel.inverted ? !inside : inside;
-}
+
 
 export const useToolStore = create<ToolState>()(
   immer((set) => ({

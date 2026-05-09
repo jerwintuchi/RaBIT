@@ -3,16 +3,15 @@ import { fileActions } from '../../state/action-composers';
 
 export function ExternalChangeDialog() {
   const { open, changedPath } = useUIStore((s) => s.externalChangeDialog);
-  const hideDialog = useUIStore((s) => s.hideExternalChangeDialog);
 
   if (!open || !changedPath) return null;
 
   function handleReload() {
-    fileActions.reloadFromDisk(changedPath!);
+    void fileActions.reloadFromDisk(changedPath!);
   }
 
   function handleKeep() {
-    hideDialog();
+    useUIStore.getState().hideExternalChangeDialog();
   }
 
   return (

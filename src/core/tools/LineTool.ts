@@ -8,7 +8,7 @@ import type {
   ToolId,
 } from '../ToolEngine';
 import { DrawCommand, type PixelDelta } from '../commands/DrawCommand';
-import { useToolStore, isInSelection } from '../../state/useToolStore';
+import { isInSelection } from '../ToolEngine/types';
 
 /**
  * Straight-line tool. Previews the line on the scratch buffer during drag,
@@ -61,7 +61,7 @@ export class LineTool implements Tool {
     if (!this.active) return;
     this.scratch!.fill(0);
     const [endX, endY] = this.constrainEndpoint(e.canvasX, e.canvasY, e.shiftKey);
-    const sel = useToolStore.getState().selection;
+    const sel = this.ctx.getSelection();
     this.plotLine(this.startX, this.startY, endX, endY, (x, y) => {
       if (x < 0 || y < 0 || x >= this.scratchW || y >= this.scratchH) return;
       if (!isInSelection(sel, x, y)) return;
@@ -85,7 +85,7 @@ export class LineTool implements Tool {
 
     const [endX, endY] = this.constrainEndpoint(e.canvasX, e.canvasY, e.shiftKey);
     const w = this.scratchW;
-    const sel = useToolStore.getState().selection;
+    const sel = this.ctx.getSelection();
     const deltas = new Map<number, PixelDelta>();
     this.plotLine(this.startX, this.startY, endX, endY, (x, y) => {
       if (x < 0 || y < 0 || x >= w || y >= this.scratchH) return;

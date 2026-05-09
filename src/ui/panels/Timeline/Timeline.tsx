@@ -142,12 +142,14 @@ export function Timeline(): JSX.Element {
   const frames = useFrameStore((s) => s.frames);
   const activeFrameIndex = useFrameStore((s) => s.activeFrameIndex);
   const playback = useFrameStore((s) => s.playback);
-  const { setPlaying, setFps, setLoop } = useFrameStore.getState();
+  const setPlaying = useCallback((v: boolean) => useFrameStore.getState().setPlaying(v), []);
+  const setFps = useCallback((v: number) => useFrameStore.getState().setFps(v), []);
+  const setLoop = useCallback((v: boolean) => useFrameStore.getState().setLoop(v), []);
 
   const layers = useLayerStore((s) => s.layers);
   const activeLayerId = useLayerStore((s) => s.activeLayerId);
   const onionSkin = useUIStore((s) => s.onionSkin);
-  const { setOnionSkin } = useUIStore.getState();
+  const setOnionSkin = useCallback((patch: Partial<{ enabled: boolean; before: number; after: number; color: number }>) => useUIStore.getState().setOnionSkin(patch), []);
 
   // ── Frame multi-select ──────────────────────────────────────────────────────
   const [selectedFrameIndices, setSelectedFrameIndices] = useState<Set<number>>(new Set());
@@ -235,7 +237,7 @@ export function Timeline(): JSX.Element {
       pendingClick: true,
       pendingClickEvent: { shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey },
     };
-    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture(e.pointerId);
   }, [frames.length, getFiFromClientX]);
 
   const onGridPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {

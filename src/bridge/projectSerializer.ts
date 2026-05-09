@@ -1,5 +1,28 @@
-import type { BlendMode, Cell, LoopDirection, Project } from '../core/DataModel/types';
 import type { CellDto, ProjectDto } from './projectIpc';
+
+// Local type aliases so this bridge file does not import from core.
+// These must stay in sync with src/core/DataModel/types.ts.
+type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay' | 'add' | 'subtract';
+type LoopDirection = 'forward' | 'reverse' | 'ping-pong';
+interface Cell { linked: boolean; data: Uint8ClampedArray | null; }
+interface Project {
+  schemaVersion: 1;
+  projectId: string;
+  name: string;
+  author: string | null;
+  createdAt: number;
+  modifiedAt: number;
+  application: string;
+  canvas: { width: number; height: number; colorMode: 'rgba'; backgroundColor: number; dpi: number };
+  layers: Array<{ id: string; name: string; visible: boolean; locked: boolean; opacity: number; blendMode: BlendMode }>;
+  frames: Array<{ id: string; duration: number; cells: Record<string, Cell> }>;
+  palette: { id: string; name: string; swatches: Array<{ color: number; name: string | null }> };
+  tags: Array<{ id: string; name: string; from: number; to: number; loopDirection: LoopDirection; color: number }>;
+  activeLayerId: string | null;
+  activeFrameIndex: number;
+  zoomLevel: number;
+  panOffset: { x: number; y: number };
+}
 
 /**
  * Converts the in-memory Project to the wire DTO for IPC.

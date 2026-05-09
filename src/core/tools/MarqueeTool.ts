@@ -8,7 +8,6 @@ import type {
   ToolId,
 } from '../ToolEngine';
 import { DrawCommand, type PixelDelta } from '../commands/DrawCommand';
-import { useToolStore } from '../../state/useToolStore';
 
 /**
  * Rectangular marquee selection.
@@ -76,7 +75,7 @@ export class MarqueeTool implements Tool {
   onPointerDown(e: CanvasPointerEvent): void {
     if (e.button !== 0) return;
 
-    const sel = useToolStore.getState().selection;
+    const sel = this.ctx.getSelection();
 
     // Inside a committed selection → enter move mode
     const insideSel =
@@ -189,9 +188,9 @@ export class MarqueeTool implements Tool {
 
       // ── selection overlay: follow only the moved pixels, not the full rect ──
       if (this._pixelBounds) {
-        const sel = useToolStore.getState().selection;
+        const sel = this.ctx.getSelection();
         if (sel) {
-          useToolStore.getState().setSelection({
+          this.ctx.setSelection({
             ...sel,
             bounds: {
               x: this._pixelBounds.x + dx,
@@ -210,7 +209,7 @@ export class MarqueeTool implements Tool {
       // promote to an active new-selection drag and clear the old selection.
       this.pendingNewSelection = false;
       this.selecting = true;
-      useToolStore.getState().clearSelection();
+      this.ctx.clearSelection();
     }
 
     if (!this.selecting) return;
@@ -223,7 +222,7 @@ export class MarqueeTool implements Tool {
     const maxY = Math.min(height - 1, Math.max(this.selStartY, y1));
     if (maxX < minX || maxY < minY) return;
 
-    useToolStore.getState().setSelection({
+    this.ctx.setSelection({
       data: MarqueeTool.DRAFT_MASK,
       width: 1,
       height: 1,
@@ -306,7 +305,7 @@ export class MarqueeTool implements Tool {
           if (fy > maxY) maxY = fy;
         }
         if (maxX >= 0) {
-          useToolStore.getState().setSelection({
+          this.ctx.setSelection({
             data: newMask, width: w, height: h,
             bounds: { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 },
           });
@@ -345,7 +344,7 @@ export class MarqueeTool implements Tool {
     const maxY = Math.min(height - 1, Math.max(this.selStartY, y1));
 
     if (maxX < minX || maxY < minY) {
-      useToolStore.getState().clearSelection();
+      this.ctx.clearSelection();
       return;
     }
 
@@ -355,7 +354,7 @@ export class MarqueeTool implements Tool {
       for (let x = minX; x <= maxX; x++)
         mask[y * width + x] = 1;
 
-    useToolStore.getState().setSelection({
+    this.ctx.setSelection({
       data: mask,
       width,
       height,
@@ -379,7 +378,7 @@ export class MarqueeTool implements Tool {
     this._pixelBounds = null;
     this._prevScratchPixels = [];
     this.ctx.clearScratch();
-    useToolStore.getState().clearSelection();
+    this.ctx.clearSelection();
   }
 
   private constrain(x: number, y: number, shift: boolean): [number, number] {

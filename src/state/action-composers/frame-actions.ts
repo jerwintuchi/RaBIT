@@ -21,7 +21,7 @@ import { cloneCell, resolveCell } from './frame-utils';
 
 function cloneFrameCells(src: { cells: Record<LayerId, Cell> }): Record<LayerId, Cell> {
   const cells: Record<LayerId, Cell> = {};
-  for (const [id, cell] of Object.entries(src.cells) as [LayerId, Cell][])
+  for (const [id, cell] of Object.entries(src.cells))
     cells[id] = cloneCell(cell);
   return cells;
 }

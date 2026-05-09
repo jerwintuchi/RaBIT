@@ -6,19 +6,17 @@ import styles from './Toast.module.css';
 const AUTO_DISMISS_MS = 4000;
 
 function ToastItem({ toast }: { toast: Toast }) {
-  const removeToast = useUIStore((s) => s.removeToast);
-
   useEffect(() => {
-    const timer = setTimeout(() => removeToast(toast.id), AUTO_DISMISS_MS);
+    const timer = setTimeout(() => useUIStore.getState().removeToast(toast.id), AUTO_DISMISS_MS);
     return () => clearTimeout(timer);
-  }, [toast.id, removeToast]);
+  }, [toast.id]);
 
   return (
     <div className={`${styles.toast} ${styles[toast.variant]}`} role="alert">
       <span className={styles.message}>{toast.message}</span>
       <button
         className={styles.close}
-        onClick={() => removeToast(toast.id)}
+        onClick={() => useUIStore.getState().removeToast(toast.id)}
         aria-label="Dismiss"
       >
         ✕

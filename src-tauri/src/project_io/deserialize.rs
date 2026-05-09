@@ -17,8 +17,7 @@ use std::{io::Read, path::Path};
 /// 5. Deserialize MessagePack → ProjectDto
 /// 6. Enforce hard limits before returning
 pub fn read_project(path: &Path) -> Result<ProjectDto, IoError> {
-    let mut file =
-        std::fs::File::open(path).map_err(|e| classify_io_error(e, path))?;
+    let mut file = std::fs::File::open(path).map_err(|e| classify_io_error(e, path))?;
 
     let header = read_header(&mut file)?;
 
@@ -114,7 +113,10 @@ mod tests {
             palette: PaletteDto {
                 id: "p1".into(),
                 name: "Palette".into(),
-                swatches: vec![SwatchDto { color: 0xff0000ff, name: None }],
+                swatches: vec![SwatchDto {
+                    color: 0xff0000ff,
+                    name: None,
+                }],
             },
             tags: vec![],
             active_layer_id: Some("l1".into()),

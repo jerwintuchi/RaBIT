@@ -43,15 +43,9 @@ pub struct KeybindingPrefs {
     pub overrides: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RecentPrefs {
     pub files: Vec<String>,
-}
-
-impl Default for RecentPrefs {
-    fn default() -> Self {
-        Self { files: Vec::new() }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,14 +152,15 @@ pub struct PrefsLoadResult {
 }
 
 #[tauri::command]
-pub fn prefs_load(
-    state: tauri::State<std::sync::Mutex<Preferences>>,
-) -> PrefsLoadResult {
+pub fn prefs_load(state: tauri::State<std::sync::Mutex<Preferences>>) -> PrefsLoadResult {
     let prefs = state.lock().unwrap().clone();
     // was_corrupt is not stored after startup; JS only needs it once at boot
     // (load_prefs is called in setup and result stored — corrupt flag is lost
     // here, so we surface it via a separate managed flag if needed in future).
-    PrefsLoadResult { prefs, was_corrupt: false }
+    PrefsLoadResult {
+        prefs,
+        was_corrupt: false,
+    }
 }
 
 #[tauri::command]
@@ -186,8 +181,10 @@ pub fn prefs_reset(
 ) -> Result<Preferences, String> {
     // Preserve recent files across reset
     let recent = state.lock().unwrap().recent.clone();
-    let mut defaults = Preferences::default();
-    defaults.recent = recent;
+    let defaults = Preferences {
+        recent,
+        ..Preferences::default()
+    };
     save_prefs(&app, &defaults)?;
     *state.lock().unwrap() = defaults.clone();
     Ok(defaults)
@@ -245,7 +242,10 @@ mod tests {
         let mut prefs = Preferences::default();
         prefs.ui.scale = 1.25;
         prefs.editor.autosave_interval_minutes = 10;
-        prefs.keybindings.overrides.insert("tool.pencil".into(), "p".into());
+        prefs
+            .keybindings
+            .overrides
+            .insert("tool.pencil".into(), "p".into());
         push_recent_file(&mut prefs, "/tmp/test.rabit");
 
         let toml_str = toml::to_string_pretty(&prefs).unwrap();
@@ -253,7 +253,10 @@ mod tests {
 
         assert_eq!(restored.ui.scale, 1.25);
         assert_eq!(restored.editor.autosave_interval_minutes, 10);
-        assert_eq!(restored.keybindings.overrides.get("tool.pencil").unwrap(), "p");
+        assert_eq!(
+            restored.keybindings.overrides.get("tool.pencil").unwrap(),
+            "p"
+        );
         assert_eq!(restored.recent.files[0], "/tmp/test.rabit");
     }
 
@@ -271,8 +274,10 @@ mod tests {
         prefs.ui.scale = 0.9;
 
         let recent = prefs.recent.clone();
-        let mut defaults = Preferences::default();
-        defaults.recent = recent;
+        let defaults = Preferences {
+            recent,
+            ..Preferences::default()
+        };
 
         assert_eq!(defaults.ui.scale, 1.0);
         assert_eq!(defaults.recent.files[0], "/path/a.rabit");

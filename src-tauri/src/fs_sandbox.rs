@@ -56,7 +56,10 @@ mod tests {
         let p = Path::new(r"C:\Users\test\..\..\Windows\system32\cmd.exe");
         #[cfg(not(windows))]
         let p = Path::new("/home/user/../../etc/passwd");
-        assert!(matches!(safe_read_path(p), Err(SandboxError::PathTraversal)));
+        assert!(matches!(
+            safe_read_path(p),
+            Err(SandboxError::PathTraversal)
+        ));
     }
 
     #[test]

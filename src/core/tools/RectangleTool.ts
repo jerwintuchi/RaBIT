@@ -8,7 +8,7 @@ import type {
   ToolId,
 } from '../ToolEngine';
 import { DrawCommand, type PixelDelta } from '../commands/DrawCommand';
-import { useToolStore, isInSelection } from '../../state/useToolStore';
+import { isInSelection } from '../ToolEngine/types';
 
 /** Draws a 1px outline rectangle. Shift-constrains to a perfect square. */
 export class RectangleTool implements Tool {
@@ -57,7 +57,7 @@ export class RectangleTool implements Tool {
     if (!this.active) return;
     this.scratch!.fill(0);
     const [x1, y1] = this.constrainSquare(e.canvasX, e.canvasY, e.shiftKey);
-    const sel = useToolStore.getState().selection;
+    const sel = this.ctx.getSelection();
     this.plotRect(this.startX, this.startY, x1, y1, (x, y) => {
       if (x >= 0 && y >= 0 && x < this.scratchW && y < this.scratchH && isInSelection(sel, x, y))
         writePixel(this.scratch!, x, y, this.scratchW, this.color);
@@ -76,7 +76,7 @@ export class RectangleTool implements Tool {
 
     const [x1, y1] = this.constrainSquare(e.canvasX, e.canvasY, e.shiftKey);
     const w = this.scratchW;
-    const sel = useToolStore.getState().selection;
+    const sel = this.ctx.getSelection();
     const deltas = new Map<number, PixelDelta>();
     this.plotRect(this.startX, this.startY, x1, y1, (x, y) => {
       if (x < 0 || y < 0 || x >= w || y >= this.scratchH) return;

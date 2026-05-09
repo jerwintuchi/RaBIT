@@ -63,8 +63,7 @@ pub async fn save_project_as(
     };
 
     let path_str = file_path.to_string();
-    let save_path =
-        safe_write_path(std::path::Path::new(&path_str)).map_err(|e| e.to_string())?;
+    let save_path = safe_write_path(std::path::Path::new(&path_str)).map_err(|e| e.to_string())?;
 
     atomic_write(&save_path, &payload.project).map_err(|e| e.to_string())?;
 
@@ -120,16 +119,12 @@ pub async fn open_project(app: tauri::AppHandle) -> Result<Option<OpenResult>, S
 
 /// Open a specific path (e.g. from the recent files list — no dialog).
 #[tauri::command]
-pub async fn open_project_at(
-    app: tauri::AppHandle,
-    path: String,
-) -> Result<OpenResult, String> {
+pub async fn open_project_at(app: tauri::AppHandle, path: String) -> Result<OpenResult, String> {
     open_at_path(&app, path).await
 }
 
 async fn open_at_path(app: &tauri::AppHandle, path: String) -> Result<OpenResult, String> {
-    let read_path =
-        safe_read_path(std::path::Path::new(&path)).map_err(|e| e.to_string())?;
+    let read_path = safe_read_path(std::path::Path::new(&path)).map_err(|e| e.to_string())?;
 
     let project = read_project(&read_path).map_err(|e| e.to_string())?;
     let loaded_at = unix_ms_now();
@@ -164,10 +159,7 @@ pub async fn get_recent_files(app: tauri::AppHandle) -> Result<Vec<RecentFileEnt
 }
 
 #[tauri::command]
-pub async fn remove_recent_file_cmd(
-    app: tauri::AppHandle,
-    path: String,
-) -> Result<(), String> {
+pub async fn remove_recent_file_cmd(app: tauri::AppHandle, path: String) -> Result<(), String> {
     let state = app.state::<Mutex<Preferences>>();
     let mut prefs = state.lock().unwrap();
     remove_recent_file(&mut prefs, &path);

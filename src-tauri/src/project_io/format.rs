@@ -52,7 +52,7 @@ pub fn read_header<R: Read>(r: &mut R) -> Result<RabitHeader, IoError> {
     r.read_exact(&mut buf)
         .map_err(|_| IoError::CorruptFile("file too short to contain a valid header".into()))?;
 
-    if &buf[0..4] != &MAGIC {
+    if buf[0..4] != MAGIC {
         return Err(IoError::BadMagic);
     }
 

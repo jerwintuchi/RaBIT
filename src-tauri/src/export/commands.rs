@@ -1,6 +1,8 @@
 use super::{
     composite::{composite_frame, upscale},
-    dto::{ExportProgress, ExportResult, FrameSelection, PngExportOptions, SpritesheetExportOptions},
+    dto::{
+        ExportProgress, ExportResult, FrameSelection, PngExportOptions, SpritesheetExportOptions,
+    },
     encode::{encode_png, write_png_file},
     spritesheet::{build_sheet, build_sidecar_json},
 };
@@ -27,14 +29,10 @@ fn frame_filename(prefix: &str, frame_idx: usize) -> String {
 // ── PNG frames export ─────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn export_png(
-    app: AppHandle,
-    options: PngExportOptions,
-) -> Result<ExportResult, String> {
+pub async fn export_png(app: AppHandle, options: PngExportOptions) -> Result<ExportResult, String> {
     let scale = options.scale.clamp(1, 16);
     let project = options.project.clone();
-    let out_dir = safe_write_path(Path::new(&options.output_dir))
-        .map_err(|e| e.to_string())?;
+    let out_dir = safe_write_path(Path::new(&options.output_dir)).map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&out_dir).map_err(|e| format!("Cannot create output dir: {e}"))?;
 
     let frame_indices: Vec<usize> = match &options.frame_selection {
@@ -57,7 +55,13 @@ pub async fn export_png(
         write_png_file(&out_path, &png_bytes)?;
         paths.push(out_path.to_string_lossy().into_owned());
 
-        if let Err(e) = app.emit("export:progress", ExportProgress { done: done_idx as u32 + 1, total }) {
+        if let Err(e) = app.emit(
+            "export:progress",
+            ExportProgress {
+                done: done_idx as u32 + 1,
+                total,
+            },
+        ) {
             tracing::warn!("export:progress emit failed: {e}");
         }
     }
@@ -80,8 +84,7 @@ pub async fn export_spritesheet(
         return Err("No frames to export".to_string());
     }
 
-    let out_path = safe_write_path(Path::new(&options.output_path))
-        .map_err(|e| e.to_string())?;
+    let out_path = safe_write_path(Path::new(&options.output_path)).map_err(|e| e.to_string())?;
     if let Some(parent) = out_path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("Cannot create output dir: {e}"))?;
     }
@@ -98,13 +101,25 @@ pub async fn export_spritesheet(
         let upscaled = upscale(&pixels, src_w, src_h, scale);
         frame_buffers.push(upscaled);
 
-        if let Err(e) = app.emit("export:progress", ExportProgress { done: frame_idx as u32 + 1, total: frame_count as u32 }) {
+        if let Err(e) = app.emit(
+            "export:progress",
+            ExportProgress {
+                done: frame_idx as u32 + 1,
+                total: frame_count as u32,
+            },
+        ) {
             tracing::warn!("export:progress emit failed: {e}");
         }
     }
 
     // Build sheet
-    let (sheet, geo) = build_sheet(&frame_buffers, frame_w, frame_h, &options.layout, options.padding);
+    let (sheet, geo) = build_sheet(
+        &frame_buffers,
+        frame_w,
+        frame_h,
+        &options.layout,
+        options.padding,
+    );
     let png_bytes = encode_png(&sheet, geo.sheet_w, geo.sheet_h)?;
     write_png_file(&out_path, &png_bytes)?;
 
@@ -125,9 +140,17 @@ pub async fn export_spritesheet(
         result_paths.push(json_path.to_string_lossy().into_owned());
     }
 
-    if let Err(e) = app.emit("export:progress", ExportProgress { done: frame_count as u32, total: frame_count as u32 }) {
+    if let Err(e) = app.emit(
+        "export:progress",
+        ExportProgress {
+            done: frame_count as u32,
+            total: frame_count as u32,
+        },
+    ) {
         tracing::warn!("export:progress emit failed: {e}");
     }
 
-    Ok(ExportResult { paths: result_paths })
+    Ok(ExportResult {
+        paths: result_paths,
+    })
 }

@@ -14,7 +14,9 @@ import {
   ipcSaveProject,
   ipcSaveProjectAs,
 } from '../../bridge/projectIpc';
+import type { ProjectDto } from '../../bridge/projectIpc';
 import type { Project } from '../../core/DataModel/types';
+import type { UnsavedIntent } from '../useUIStore';
 import { useFrameStore } from '../useFrameStore';
 import { useHistoryStore } from '../useHistoryStore';
 import { useLayerStore } from '../useLayerStore';
@@ -69,7 +71,7 @@ function nameFromPath(path: string): string {
   return base.replace(/\.rabit$/i, '') || base;
 }
 
-function hydrateFromDto(dto: import('../../bridge/projectIpc').ProjectDto, path: string): void {
+function hydrateFromDto(dto: ProjectDto, path: string): void {
   const project = dtoToProject(dto);
 
   useProjectStore.getState().resetProject(
@@ -127,7 +129,7 @@ function formatShortPath(fullPath: string): string {
     : fullPath;
 }
 
-async function confirmDiscardIfDirty(intent: import('../useUIStore').UnsavedIntent): Promise<boolean> {
+async function confirmDiscardIfDirty(intent: UnsavedIntent): Promise<boolean> {
   const { meta } = useProjectStore.getState();
   if (!meta.dirty) return true;
 
@@ -218,7 +220,7 @@ export async function openProjectAt(path: string): Promise<boolean> {
     await syncWindowTitle();
     await refreshRecentFiles();
     return true;
-  } catch (e) {
+  } catch {
     // File not found or corrupt — remove from recent list
     await ipcRemoveRecentFile(path).catch(() => null);
     await refreshRecentFiles();

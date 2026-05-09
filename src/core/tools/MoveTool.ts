@@ -8,7 +8,6 @@ import type {
   ToolId,
 } from '../ToolEngine';
 import { DrawCommand, type PixelDelta } from '../commands/DrawCommand';
-import { useToolStore } from '../../state/useToolStore';
 
 /**
  * Moves pixels of the active layer by a drag offset.
@@ -54,7 +53,7 @@ export class MoveTool implements Tool {
     this.startX = e.canvasX;
     this.startY = e.canvasY;
 
-    const selection = useToolStore.getState().selection;
+    const selection = this.ctx.getSelection();
 
     if (selection) {
       // Snapshot original bounds so we can compute new overlay position live
@@ -102,9 +101,9 @@ export class MoveTool implements Tool {
 
     // Move the selection overlay live
     if (this.selBoundsAtStart) {
-      const sel = useToolStore.getState().selection;
+      const sel = this.ctx.getSelection();
       if (sel) {
-        useToolStore.getState().setSelection({
+        this.ctx.setSelection({
           ...sel,
           bounds: {
             x: this.selBoundsAtStart.x + dx,
@@ -175,7 +174,7 @@ export class MoveTool implements Tool {
       for (let my = ny; my < ny + nh && my < h; my++)
         for (let mx = nx; mx < nx + nw && mx < w; mx++)
           newMask[my * w + mx] = 1;
-      useToolStore.getState().setSelection({
+      this.ctx.setSelection({
         data: newMask, width: w, height: h,
         bounds: { x: nx, y: ny, w: nw, h: nh },
       });

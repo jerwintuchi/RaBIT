@@ -33,7 +33,7 @@ const ACTION_LABELS: Record<string, string> = {
 
 export function PrefsDialog() {
   const open = useUIStore((s) => s.prefsDialog.open);
-  const hide = useUIStore((s) => s.hidePrefsDialog);
+  const hide = () => useUIStore.getState().hidePrefsDialog();
   const store = usePrefsStore();
 
   const [tab, setTab] = useState<Tab>('general');
@@ -131,7 +131,7 @@ export function PrefsDialog() {
     const prefs = buildPrefs();
     await ipcPrefsSave(prefs).catch(() => null);
     store.setUiScale(draftScale);
-    store.setKeybinding && Object.entries(draftBindings).forEach(([id, c]) => store.setKeybinding(id, c));
+    if (store.setKeybinding) Object.entries(draftBindings).forEach(([id, c]) => store.setKeybinding(id, c));
     hide();
   }
 

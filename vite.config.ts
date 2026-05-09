@@ -46,4 +46,10 @@ export default defineConfig(async () => ({
   },
 
   envPrefix: ['VITE_', 'TAURI_'],
+
+  test: {
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'tests/**/*.{test,spec}.{ts,tsx}'],
+    exclude: ['e2e/**', 'node_modules/**'],
+    environment: 'happy-dom',
+  },
 }));

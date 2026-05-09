@@ -6,11 +6,7 @@ use super::error::IoError;
 ///
 /// v1 is the first format version — no migrations exist yet. This stub provides
 /// the chain for future v2+ migrations without changing callers.
-pub fn migrate(
-    data: rmpv::Value,
-    from_major: u16,
-    to_major: u16,
-) -> Result<rmpv::Value, IoError> {
+pub fn migrate(data: rmpv::Value, from_major: u16, to_major: u16) -> Result<rmpv::Value, IoError> {
     if from_major == to_major {
         return Ok(data);
     }

@@ -44,12 +44,12 @@ enum BlendMode {
 impl BlendMode {
     fn from_str(s: &str) -> Self {
         match s {
-            "multiply"  => Self::Multiply,
-            "screen"    => Self::Screen,
-            "overlay"   => Self::Overlay,
-            "add"       => Self::Add,
-            "subtract"  => Self::Subtract,
-            _           => Self::Normal,
+            "multiply" => Self::Multiply,
+            "screen" => Self::Screen,
+            "overlay" => Self::Overlay,
+            "add" => Self::Add,
+            "subtract" => Self::Subtract,
+            _ => Self::Normal,
         }
     }
 }

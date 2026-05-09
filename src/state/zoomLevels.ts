@@ -6,5 +6,5 @@ export function snapZoom(current: number, direction: 'in' | 'out'): number {
   if (direction === 'in') {
     return ZOOM_LEVELS.find((z) => z > current) ?? ZOOM_LEVELS[ZOOM_LEVELS.length - 1]!;
   }
-  return [...ZOOM_LEVELS].reverse().find((z) => z < current) ?? ZOOM_LEVELS[0]!;
+  return [...ZOOM_LEVELS].reverse().find((z) => z < current) ?? ZOOM_LEVELS[0];
 }

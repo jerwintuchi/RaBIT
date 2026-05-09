@@ -1,6 +1,6 @@
 import type { LayerId, RGBA } from '../DataModel';
 import { readPixel, writePixel } from '../DataModel';
-import { useToolStore, isInSelection } from '../../state/useToolStore';
+import { isInSelection } from '../ToolEngine/types';
 import type {
   CanvasPointerEvent,
   CursorDef,
@@ -57,7 +57,7 @@ export class EllipseTool implements Tool {
     if (!this.active) return;
     this.scratch!.fill(0);
     const [x1, y1] = this.constrainCircle(e.canvasX, e.canvasY, e.shiftKey);
-    const sel = useToolStore.getState().selection;
+    const sel = this.ctx.getSelection();
     this.plotEllipse(this.startX, this.startY, x1, y1, (x, y) => {
       if (x >= 0 && y >= 0 && x < this.scratchW && y < this.scratchH && isInSelection(sel, x, y))
         writePixel(this.scratch!, x, y, this.scratchW, this.color);
@@ -76,7 +76,7 @@ export class EllipseTool implements Tool {
 
     const [x1, y1] = this.constrainCircle(e.canvasX, e.canvasY, e.shiftKey);
     const w = this.scratchW;
-    const sel = useToolStore.getState().selection;
+    const sel = this.ctx.getSelection();
     const deltas = new Map<number, PixelDelta>();
     this.plotEllipse(this.startX, this.startY, x1, y1, (x, y) => {
       if (x < 0 || y < 0 || x >= w || y >= this.scratchH) return;

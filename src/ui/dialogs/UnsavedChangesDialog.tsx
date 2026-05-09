@@ -10,7 +10,7 @@ const INTENT_LABELS: Record<string, string> = {
 
 export function UnsavedChangesDialog() {
   const { open, intent } = useUIStore((s) => s.unsavedChangesDialog);
-  const hideDialog = useUIStore((s) => s.hideUnsavedChangesDialog);
+  const hideDialog = () => useUIStore.getState().hideUnsavedChangesDialog();
 
   if (!open) return null;
 
@@ -49,7 +49,7 @@ export function UnsavedChangesDialog() {
           <button className={`${styles.btn} ${styles.btnDiscard}`} onClick={handleDiscard}>
             Discard
           </button>
-          <button className={`${styles.btn} ${styles.btnSave}`} onClick={handleSave}>
+          <button className={`${styles.btn} ${styles.btnSave}`} onClick={() => { void handleSave(); }}>
             Save
           </button>
         </div>

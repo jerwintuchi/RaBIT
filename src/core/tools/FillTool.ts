@@ -7,8 +7,8 @@ import type {
   ToolId,
 } from '../ToolEngine';
 import { DrawCommand, type PixelDelta } from '../commands/DrawCommand';
-import { useToolStore, isInSelection } from '../../state/useToolStore';
-import type { SelectionMask } from '../../state/useToolStore';
+import { isInSelection } from '../ToolEngine/types';
+import type { SelectionMask } from '../ToolEngine/types';
 
 /** Flood-fills contiguous pixels that match the clicked color within tolerance. */
 export class FillTool implements Tool {
@@ -29,8 +29,8 @@ export class FillTool implements Tool {
     if (e.canvasX < 0 || e.canvasY < 0 || e.canvasX >= width || e.canvasY >= height) return;
 
     const color = this.ctx.getPrimaryColor();
-    const { tolerance } = useToolStore.getState().options.fill;
-    const { selection } = useToolStore.getState();
+    const tolerance = this.ctx.getFillTolerance();
+    const selection = this.ctx.getSelection();
     if (selection && !isInSelection(selection, e.canvasX, e.canvasY)) return;
     const deltas = this.floodFill(layerBuf, width, height, e.canvasX, e.canvasY, color, tolerance, selection);
     if (deltas.length === 0) return;

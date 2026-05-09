@@ -24,7 +24,11 @@ pub fn compute_layout(
             let offsets = (0..frame_count)
                 .map(|i| (i * (frame_w + padding), 0))
                 .collect();
-            SheetGeometry { sheet_w, sheet_h, offsets }
+            SheetGeometry {
+                sheet_w,
+                sheet_h,
+                offsets,
+            }
         }
         SheetLayout::Vertical => {
             let sheet_w = frame_w;
@@ -32,7 +36,11 @@ pub fn compute_layout(
             let offsets = (0..frame_count)
                 .map(|i| (0, i * (frame_h + padding)))
                 .collect();
-            SheetGeometry { sheet_w, sheet_h, offsets }
+            SheetGeometry {
+                sheet_w,
+                sheet_h,
+                offsets,
+            }
         }
         SheetLayout::Grid { columns } => {
             let cols = (*columns).max(1).min(frame_count);
@@ -46,7 +54,11 @@ pub fn compute_layout(
                     (col * (frame_w + padding), row * (frame_h + padding))
                 })
                 .collect();
-            SheetGeometry { sheet_w, sheet_h, offsets }
+            SheetGeometry {
+                sheet_w,
+                sheet_h,
+                offsets,
+            }
         }
     }
 }
@@ -105,11 +117,7 @@ pub fn build_sidecar_json(
         .iter()
         .enumerate()
         .map(|(i, &(x, y))| {
-            let duration = project
-                .frames
-                .get(i)
-                .map(|f| f.duration)
-                .unwrap_or(100);
+            let duration = project.frames.get(i).map(|f| f.duration).unwrap_or(100);
             json!({
                 "index": i,
                 "x": x,

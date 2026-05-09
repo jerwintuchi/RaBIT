@@ -5,7 +5,6 @@ import styles from './WelcomeScreen.module.css';
 
 export function WelcomeScreen() {
   const recentFiles = useUIStore((s) => s.recentFiles);
-  const showNewProjectDialog = useUIStore((s) => s.showNewProjectDialog);
 
   return (
     <div className={styles.overlay}>
@@ -22,11 +21,11 @@ export function WelcomeScreen() {
 
           <div className={styles.sidebarActions}>
             <div className={styles.actionSectionLabel}>Start</div>
-            <button className={styles.btnNew} onClick={showNewProjectDialog}>
+            <button className={styles.btnNew} onClick={() => useUIStore.getState().showNewProjectDialog()}>
               <span className={styles.btnIcon}>✦</span>
               New Project…
             </button>
-            <button className={styles.btnOpen} onClick={() => fileActions.openProject()}>
+            <button className={styles.btnOpen} onClick={() => { void fileActions.openProject(); }}>
               <span className={styles.btnIcon}>⌂</span>
               Open File…
             </button>
@@ -36,7 +35,7 @@ export function WelcomeScreen() {
 
           <button
             className={styles.btnSkip}
-            onClick={() => fileActions.newProject('Untitled', 32, 32)}
+            onClick={() => { void fileActions.newProject('Untitled', 32, 32); }}
           >
             Skip → blank 32×32 canvas
           </button>
@@ -53,7 +52,7 @@ export function WelcomeScreen() {
                 <li
                   key={f.path}
                   className={`${styles.recentItem} ${f.missing ? styles.missing : ''}`}
-                  onClick={() => { if (!f.missing) fileActions.openProjectAt(f.path); }}
+                  onClick={() => { if (!f.missing) void fileActions.openProjectAt(f.path); }}
                   title={f.path}
                 >
                   <div className={styles.recentItemMeta}>
@@ -63,7 +62,7 @@ export function WelcomeScreen() {
                   {f.missing && (
                     <button
                       className={styles.removeBtn}
-                      onClick={(e) => { e.stopPropagation(); fileActions.removeRecentFile(f.path); }}
+                      onClick={(e) => { e.stopPropagation(); void fileActions.removeRecentFile(f.path); }}
                       title="Remove from list"
                       aria-label="Remove"
                     >

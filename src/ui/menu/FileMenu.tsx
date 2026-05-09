@@ -11,8 +11,6 @@ export function FileMenu() {
   const filePath = useProjectStore((s) => s.meta.filePath);
   const hasProject = useProjectStore((s) => s.meta.projectId !== null);
   const recentFiles = useUIStore((s) => s.recentFiles);
-  const showNewProjectDialog = useUIStore((s) => s.showNewProjectDialog);
-  const showExportDialog = useUIStore((s) => s.showExportDialog);
 
   const pos = open ? getDropdownPos() : { top: 28, left: 0 };
 
@@ -35,12 +33,12 @@ export function FileMenu() {
           <MenuItem
             label="New"
             shortcut="Ctrl+N"
-            onClick={() => { close(); showNewProjectDialog(); }}
+            onClick={() => { close(); useUIStore.getState().showNewProjectDialog(); }}
           />
           <MenuItem
             label="Open…"
             shortcut="Ctrl+O"
-            onClick={() => { close(); fileActions.openProject(); }}
+            onClick={() => { close(); void fileActions.openProject(); }}
           />
 
           <div className={styles.separator} />
@@ -49,12 +47,12 @@ export function FileMenu() {
             label="Save"
             shortcut="Ctrl+S"
             disabled={!dirty && !!filePath}
-            onClick={() => { close(); fileActions.saveProject(); }}
+            onClick={() => { close(); void fileActions.saveProject(); }}
           />
           <MenuItem
             label="Save As…"
             shortcut="Ctrl+Shift+S"
-            onClick={() => { close(); fileActions.saveProjectAs(); }}
+            onClick={() => { close(); void fileActions.saveProjectAs(); }}
           />
 
           <div className={styles.separator} />
@@ -63,7 +61,7 @@ export function FileMenu() {
             label="Export…"
             shortcut="Ctrl+E"
             disabled={!hasProject}
-            onClick={() => { close(); showExportDialog(); }}
+            onClick={() => { close(); useUIStore.getState().showExportDialog(); }}
           />
 
           <div className={styles.separator} />
@@ -82,7 +80,7 @@ export function FileMenu() {
                   onClick={() => {
                     if (f.missing) return;
                     close();
-                    fileActions.openProjectAt(f.path);
+                    void fileActions.openProjectAt(f.path);
                   }}
                 />
               ))}
@@ -90,7 +88,7 @@ export function FileMenu() {
               <MenuItem
                 label="Clear Recent Files"
                 muted
-                onClick={() => { close(); fileActions.clearRecentFiles(); }}
+                onClick={() => { close(); void fileActions.clearRecentFiles(); }}
               />
             </>
           )}

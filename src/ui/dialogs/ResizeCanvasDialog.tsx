@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useProjectStore } from '../../state/useProjectStore';
 import { useUIStore } from '../../state/useUIStore';
 import { canvasActions } from '../../state/action-composers';
-import type { ResizeMode } from '../../core/commands/ResizeCanvasCommand';
+type ResizeMode = 'crop' | 'scale';
 import styles from './ResizeCanvasDialog.module.css';
 
 const MAX_DIM = 640;
@@ -19,7 +19,7 @@ const PRESETS: Preset[] = [
 
 export function ResizeCanvasDialog() {
   const open = useUIStore((s) => s.resizeCanvasDialog.open);
-  const hideDialog = useUIStore((s) => s.hideResizeCanvasDialog);
+  const hideDialog = () => useUIStore.getState().hideResizeCanvasDialog();
   const { width: currentW, height: currentH } = useProjectStore((s) => s.canvas);
 
   const [width, setWidth]   = useState(currentW);

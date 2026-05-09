@@ -9,7 +9,6 @@ export function EditMenu() {
 
   const canUndo = useHistoryStore((s) => s.canUndo());
   const canRedo = useHistoryStore((s) => s.canRedo());
-  const showPrefsDialog = useUIStore((s) => s.showPrefsDialog);
 
   const pos = open ? getDropdownPos() : { top: 28, left: 0 };
 
@@ -47,7 +46,7 @@ export function EditMenu() {
           <MenuItem
             label="Preferences…"
             shortcut="Ctrl+,"
-            onClick={() => { close(); showPrefsDialog(); }}
+            onClick={() => { close(); useUIStore.getState().showPrefsDialog(); }}
           />
         </div>
       )}

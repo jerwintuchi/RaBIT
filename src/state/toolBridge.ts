@@ -24,6 +24,7 @@ import { useProjectStore } from './useProjectStore';
 import { usePaletteStore } from './usePaletteStore';
 import { useHistoryStore } from './useHistoryStore';
 import { useUIStore } from './useUIStore';
+import { useToolStore } from './useToolStore';
 import { resolveCell } from './action-composers/frame-utils';
 import {
   updateScratch as bridgeUpdateScratch,
@@ -83,6 +84,10 @@ function buildContext(): ToolEngineContext {
       uploadLayerData(layerId, data);
       getEngine()?.markDirty(DirtyFlag.LAYER_DATA | DirtyFlag.FULL);
     },
+    getSelection: () => useToolStore.getState().selection,
+    setSelection: (mask) => useToolStore.getState().setSelection(mask),
+    clearSelection: () => useToolStore.getState().clearSelection(),
+    getFillTolerance: () => useToolStore.getState().options.fill.tolerance,
     zoomToward: (cx, cy, direction) => {
       const ui = useUIStore.getState();
       const oldZoom = ui.zoomLevel;

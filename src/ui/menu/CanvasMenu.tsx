@@ -10,7 +10,6 @@ export function CanvasMenu() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const hasProject = useLayerStore((s) => s.layers.length > 0);
-  const showResizeCanvasDialog = useUIStore((s) => s.showResizeCanvasDialog);
 
   useEffect(() => {
     if (!open) return;
@@ -63,7 +62,7 @@ export function CanvasMenu() {
         >
           <MenuItem
             label="Resize Canvas…"
-            onClick={() => { setOpen(false); showResizeCanvasDialog(); }}
+            onClick={() => { setOpen(false); useUIStore.getState().showResizeCanvasDialog(); }}
           />
         </div>
       )}

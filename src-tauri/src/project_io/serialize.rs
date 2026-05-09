@@ -23,8 +23,8 @@ pub fn atomic_write(path: &Path, project: &ProjectDto) -> Result<(), IoError> {
         rmp_serde::to_vec_named(project).map_err(|e| IoError::CorruptFile(e.to_string()))?;
 
     // 2. Compress with zstd (level 3 — good balance of speed and ratio)
-    let compressed = zstd::encode_all(msgpack_bytes.as_slice(), 3)
-        .map_err(|e| classify_io_error(e, path))?;
+    let compressed =
+        zstd::encode_all(msgpack_bytes.as_slice(), 3).map_err(|e| classify_io_error(e, path))?;
 
     let checksum = adler32(&compressed);
 
@@ -40,8 +40,8 @@ pub fn atomic_write(path: &Path, project: &ProjectDto) -> Result<(), IoError> {
     // 3. Write to .tmp
     let tmp_path = tmp_path_for(path);
     {
-        let mut file = std::fs::File::create(&tmp_path)
-            .map_err(|e| classify_io_error(e, &tmp_path))?;
+        let mut file =
+            std::fs::File::create(&tmp_path).map_err(|e| classify_io_error(e, &tmp_path))?;
         write_header(&mut file, &header).map_err(|e| classify_io_error(e, &tmp_path))?;
         file.write_all(&compressed)
             .map_err(|e| classify_io_error(e, &tmp_path))?;
@@ -75,8 +75,7 @@ fn verify_tmp(tmp_path: &Path, expected: &RabitHeader) -> Result<(), IoError> {
     use super::format::read_header;
     use std::io::Read;
 
-    let mut file = std::fs::File::open(tmp_path)
-        .map_err(|e| classify_io_error(e, tmp_path))?;
+    let mut file = std::fs::File::open(tmp_path).map_err(|e| classify_io_error(e, tmp_path))?;
 
     let header = read_header(&mut file)?;
 

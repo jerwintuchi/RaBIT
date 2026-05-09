@@ -17,7 +17,7 @@ const PRESETS: Preset[] = [
 
 export function NewProjectDialog() {
   const open = useUIStore((s) => s.newProjectDialog.open);
-  const hideDialog = useUIStore((s) => s.hideNewProjectDialog);
+  const hideDialog = () => useUIStore.getState().hideNewProjectDialog();
 
   const [name, setName]     = useState('Untitled');
   const [width, setWidth]   = useState(32);
@@ -37,7 +37,7 @@ export function NewProjectDialog() {
 
   function handleConfirm() {
     if (!canConfirm) return;
-    fileActions.newProject(name.trim(), width, height);
+    void fileActions.newProject(name.trim(), width, height);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {

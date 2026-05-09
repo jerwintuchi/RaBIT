@@ -127,7 +127,7 @@ export function ToolBar(): JSX.Element {
               aria-pressed={isActive}
               onClick={(e) => {
                 useToolStore.getState().setActiveTool(id);
-                (e.currentTarget as HTMLButtonElement).blur();
+                e.currentTarget.blur();
               }}
             >
               <Icon size={18} />

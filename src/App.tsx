@@ -153,17 +153,17 @@ export function App(): JSX.Element {
       }
       if (ctrl && e.key.toLowerCase() === 'o') {
         e.preventDefault();
-        fileActions.openProject();
+        void fileActions.openProject();
         return;
       }
       if (ctrl && e.key.toLowerCase() === 's' && !e.shiftKey) {
         e.preventDefault();
-        fileActions.saveProject();
+        void fileActions.saveProject();
         return;
       }
       if (ctrl && e.key.toLowerCase() === 's' && e.shiftKey) {
         e.preventDefault();
-        fileActions.saveProjectAs();
+        void fileActions.saveProjectAs();
         return;
       }
       if (ctrl && e.key.toLowerCase() === 'e') {

@@ -8,7 +8,7 @@ import type {
   ToolId,
 } from '../ToolEngine';
 import { DrawCommand, type PixelDelta } from '../commands/DrawCommand';
-import { useToolStore, isInSelection } from '../../state/useToolStore';
+import { isInSelection } from '../ToolEngine/types';
 
 /**
  * Shared base for hard-edged 1px brush-style tools (pencil, eraser).
@@ -138,7 +138,7 @@ export abstract class BrushTool implements Tool {
     const h = this.scratchH;
     if (x < 0 || y < 0 || x >= w || y >= h) return;
     if (!this.scratch || !this.layerBuf) return;
-    if (!isInSelection(useToolStore.getState().selection, x, y)) return;
+    if (!isInSelection(this.ctx.getSelection(), x, y)) return;
 
     const key = y * w + x;
     if (!this.deltas.has(key)) {

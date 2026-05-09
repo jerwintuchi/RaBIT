@@ -14,7 +14,7 @@ const SCALES: Scale[] = [1, 2, 4, 8, 16];
 
 export function ExportDialog() {
   const open = useUIStore((s) => s.exportDialog.open);
-  const hide = useUIStore((s) => s.hideExportDialog);
+  const hide = () => useUIStore.getState().hideExportDialog();
   const projectName = useProjectStore((s) => s.meta.name);
   const frameCount = useFrameStore((s) => s.frames.length);
   const activeFrameIndex = useFrameStore((s) => s.activeFrameIndex);
