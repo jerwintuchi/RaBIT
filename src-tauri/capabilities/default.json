@@ -6,6 +6,9 @@
   "permissions": [
     "core:default",
     "dialog:allow-open",
-    "dialog:allow-save"
+    "dialog:allow-save",
+    "core:window:allow-destroy",
+    "core:window:allow-close",
+    "core:window:allow-set-title"
   ]
 }

@@ -254,6 +254,7 @@ export async function newProject(
   width: number,
   height: number,
 ): Promise<void> {
+  if (!await confirmDiscardIfDirty('new')) return;
   initNewProject(name, width, height);
   useProjectStore.getState().setFilePath(null);
   useProjectStore.getState().setDirty(false);

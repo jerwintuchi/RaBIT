@@ -3,7 +3,7 @@ import { useUIStore } from '../../state/useUIStore';
 import { fileActions } from '../../state/action-composers';
 import styles from './NewProjectDialog.module.css';
 
-const MAX_DIM = 640;
+const MAX_DIM = 4096;
 
 interface Preset { label: string; w: number; h: number; hint: string; }
 const PRESETS: Preset[] = [
