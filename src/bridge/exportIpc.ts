@@ -56,6 +56,20 @@ export async function ipcExportSpritesheet(
   return invoke<ExportResult>('export_spritesheet', { options });
 }
 
+export interface GifExportOptions {
+  project: ProjectDto;
+  scale: 1 | 2 | 4;
+  loopCount: number;
+  dither: boolean;
+  outputPath: string;
+}
+
+export async function ipcExportGif(
+  options: GifExportOptions,
+): Promise<ExportResult> {
+  return invoke<ExportResult>('export_gif', { options });
+}
+
 export function listenExportProgress(
   handler: (progress: ExportProgress) => void,
 ): Promise<UnlistenFn> {

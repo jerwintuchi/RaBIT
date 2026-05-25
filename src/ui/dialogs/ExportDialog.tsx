@@ -8,9 +8,11 @@ import type { ExportProgress } from '../../bridge/exportIpc';
 import type { SheetLayout } from '../../bridge/exportIpc';
 import styles from './ExportDialog.module.css';
 
-type Tab = 'png' | 'spritesheet';
+type Tab = 'png' | 'spritesheet' | 'gif';
 type Scale = 1 | 2 | 4 | 8 | 16;
 const SCALES: Scale[] = [1, 2, 4, 8, 16];
+type GifScale = 1 | 2 | 4;
+const GIF_SCALES: GifScale[] = [1, 2, 4];
 
 export function ExportDialog() {
   const open = useUIStore((s) => s.exportDialog.open);
@@ -26,6 +28,12 @@ export function ExportDialog() {
   const [pngScale, setPngScale] = useState<Scale>(1);
   const [pngBg, setPngBg] = useState(false);
   const [pngDir, setPngDir] = useState('');
+
+  // GIF tab state
+  const [gifScale, setGifScale] = useState<GifScale>(1);
+  const [gifLoopCount, setGifLoopCount] = useState(0);
+  const [gifDither, setGifDither] = useState(false);
+  const [gifPath, setGifPath] = useState('');
 
   // Spritesheet tab state
   const [sheetLayoutType, setSheetLayoutType] = useState<'horizontal' | 'vertical' | 'grid'>('horizontal');
@@ -57,6 +65,14 @@ export function ExportDialog() {
     if (typeof selected === 'string') setSheetPath(selected);
   };
 
+  const handlePickGifFile = async () => {
+    const selected = await saveDialog({
+      filters: [{ name: 'GIF Animation', extensions: ['gif'] }],
+      defaultPath: `${projectName}.gif`,
+    }).catch(() => null);
+    if (typeof selected === 'string') setGifPath(selected);
+  };
+
   const handleExport = async () => {
     setExporting(true);
     setProgress(null);
@@ -74,7 +90,7 @@ export function ExportDialog() {
         },
         onProgress,
       );
-    } else {
+    } else if (tab === 'spritesheet') {
       const layout: SheetLayout =
         sheetLayoutType === 'grid'
           ? { type: 'grid', columns: sheetColumns }
@@ -91,6 +107,16 @@ export function ExportDialog() {
         },
         onProgress,
       );
+    } else {
+      await exportActions.exportGif(
+        {
+          scale: gifScale,
+          loopCount: gifLoopCount,
+          dither: gifDither,
+          outputPath: gifPath,
+        },
+        onProgress,
+      );
     }
 
     setExporting(false);
@@ -100,7 +126,8 @@ export function ExportDialog() {
   const exportDisabled =
     exporting ||
     (tab === 'png' && !pngDir) ||
-    (tab === 'spritesheet' && !sheetPath);
+    (tab === 'spritesheet' && !sheetPath) ||
+    (tab === 'gif' && !gifPath);
 
   const progressPct = progress ? Math.round((progress.done / progress.total) * 100) : 0;
 
@@ -120,6 +147,12 @@ export function ExportDialog() {
             onClick={() => setTab('spritesheet')}
           >
             Spritesheet
+          </button>
+          <button
+            className={`${styles.tab}${tab === 'gif' ? ` ${styles.tabActive}` : ''}`}
+            onClick={() => setTab('gif')}
+          >
+            GIF
           </button>
         </div>
 
@@ -246,6 +279,50 @@ export function ExportDialog() {
                 <div className={styles.pathRow}>
                   <span className={styles.pathDisplay}>{sheetPath || 'No file selected'}</span>
                   <button className={styles.pathBtn} onClick={() => void handlePickFile()}>Browse…</button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {tab === 'gif' && (
+            <>
+              <div className={styles.field}>
+                <span className={styles.label}>Scale</span>
+                <div className={styles.scaleGroup}>
+                  {GIF_SCALES.map((s) => (
+                    <button
+                      key={s}
+                      className={`${styles.scaleBtn}${gifScale === s ? ` ${styles.scaleBtnActive}` : ''}`}
+                      onClick={() => setGifScale(s)}
+                    >
+                      {s}×
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.field}>
+                <span className={styles.label}>Loop count (0 = infinite)</span>
+                <input
+                  type="number"
+                  className={styles.numInput}
+                  value={gifLoopCount}
+                  min={0}
+                  max={65535}
+                  onChange={(e) => setGifLoopCount(Math.max(0, parseInt(e.target.value) || 0))}
+                />
+              </div>
+
+              <label className={styles.checkRow}>
+                <input type="checkbox" checked={gifDither} onChange={(e) => setGifDither(e.target.checked)} />
+                Ordered dithering (better quality, larger file)
+              </label>
+
+              <div className={styles.field}>
+                <span className={styles.label}>Output file</span>
+                <div className={styles.pathRow}>
+                  <span className={styles.pathDisplay}>{gifPath || 'No file selected'}</span>
+                  <button className={styles.pathBtn} onClick={() => void handlePickGifFile()}>Browse…</button>
                 </div>
               </div>
             </>

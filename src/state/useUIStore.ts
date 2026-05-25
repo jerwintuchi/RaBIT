@@ -31,14 +31,13 @@ interface UIState {
   showCheckerboard: boolean;
   showGrid: boolean;
   showPixelGrid: boolean;
+  tileMode: boolean;
   onionSkin: {
     enabled: boolean;
     before: number;
     after: number;
     opacity: number;
   };
-
-  // ── M9: File I/O UI state ───────────────────────────────────────────────
 
   unsavedChangesDialog: {
     open: boolean;
@@ -73,14 +72,17 @@ interface UIState {
     open: boolean;
   };
 
+  rotateConfirmDialog: {
+    open: boolean;
+    dir: 'cw' | 'ccw';
+  };
+
   welcomeScreen: {
     visible: boolean;
   };
 
   recentFiles: RecentFileEntry[];
   toasts: Toast[];
-
-  // ── Actions ─────────────────────────────────────────────────────────────
 
   setTheme(theme: Theme): void;
   setPanels(patch: Partial<PanelLayout>): void;
@@ -91,6 +93,7 @@ interface UIState {
   setShowCheckerboard(v: boolean): void;
   setShowGrid(v: boolean): void;
   setShowPixelGrid(v: boolean): void;
+  setTileMode(on: boolean): void;
   setOnionSkin(patch: Partial<UIState['onionSkin']>): void;
   resetView(): void;
 
@@ -114,6 +117,9 @@ interface UIState {
 
   showPrefsDialog(): void;
   hidePrefsDialog(): void;
+
+  showRotateConfirmDialog(dir: 'cw' | 'ccw'): void;
+  hideRotateConfirmDialog(): void;
 
   setWelcomeVisible(v: boolean): void;
   setRecentFiles(files: RecentFileEntry[]): void;
@@ -145,6 +151,7 @@ export const useUIStore = create<UIState>()(
     showCheckerboard: true,
     showGrid: false,
     showPixelGrid: false,
+    tileMode: false,
     onionSkin: { enabled: false, before: 1, after: 1, opacity: 0.5 },
 
     unsavedChangesDialog: { open: false, intent: null, pendingPath: null },
@@ -154,6 +161,7 @@ export const useUIStore = create<UIState>()(
     crashRecoveryDialog: { open: false, savedAt: null, projectName: null },
     exportDialog: { open: false },
     prefsDialog: { open: false },
+    rotateConfirmDialog: { open: false, dir: 'cw' as const },
     welcomeScreen: { visible: false },
     recentFiles: [],
     toasts: [],
@@ -192,6 +200,10 @@ export const useUIStore = create<UIState>()(
 
     setShowPixelGrid(v) {
       set((s) => { s.showPixelGrid = v; });
+    },
+
+    setTileMode(on) {
+      set((s) => { s.tileMode = on; });
     },
 
     setOnionSkin(patch) {
@@ -273,6 +285,14 @@ export const useUIStore = create<UIState>()(
       set((s) => { s.prefsDialog.open = false; });
     },
 
+    showRotateConfirmDialog(dir) {
+      set((s) => { s.rotateConfirmDialog = { open: true, dir }; });
+    },
+
+    hideRotateConfirmDialog() {
+      set((s) => { s.rotateConfirmDialog.open = false; });
+    },
+
     setWelcomeVisible(v) {
       set((s) => { s.welcomeScreen.visible = v; });
     },
@@ -295,7 +315,6 @@ export const useUIStore = create<UIState>()(
   })),
 );
 
-/** Convenience helper — call from anywhere without importing the store. */
 export const toast = {
   info: (msg: string) => useUIStore.getState().addToast(msg, 'info'),
   error: (msg: string) => useUIStore.getState().addToast(msg, 'error'),

@@ -76,6 +76,7 @@ export interface ProjectDto {
   activeFrameIndex: number;
   zoomLevel: number;
   panOffset: PanOffsetDto;
+  reference_path?: string | null;
 }
 
 export interface SaveProjectPayload {

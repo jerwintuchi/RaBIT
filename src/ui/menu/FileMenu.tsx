@@ -1,8 +1,28 @@
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { ipcLoadReferenceImage } from '../../bridge/referenceIpc';
 import { useProjectStore } from '../../state/useProjectStore';
-import { useUIStore } from '../../state/useUIStore';
+import { useReferenceStore } from '../../state/useReferenceStore';
+import { toast, useUIStore } from '../../state/useUIStore';
 import { fileActions } from '../../state/action-composers';
 import { useDropdownMenu } from './useDropdownMenu';
 import styles from './FileMenu.module.css';
+
+async function addReferenceImage(): Promise<void> {
+  const selected = await openDialog({
+    multiple: false,
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+  });
+  if (typeof selected !== 'string') return;
+  try {
+    const result = await ipcLoadReferenceImage(selected);
+    const pixels = new Uint8ClampedArray(result.pixels);
+    useReferenceStore.getState().setImage(selected, pixels, result.width, result.height);
+    useProjectStore.getState().setReferencePath(selected);
+    toast.info('Reference image loaded');
+  } catch (e) {
+    toast.error(`Failed to load reference image: ${String(e)}`);
+  }
+}
 
 export function FileMenu() {
   const { open, setOpen, close, triggerRef, dropdownRef, getDropdownPos } = useDropdownMenu();
@@ -62,6 +82,11 @@ export function FileMenu() {
             shortcut="Ctrl+E"
             disabled={!hasProject}
             onClick={() => { close(); useUIStore.getState().showExportDialog(); }}
+          />
+          <MenuItem
+            label="Add Reference Image…"
+            disabled={!hasProject}
+            onClick={() => { close(); void addReferenceImage(); }}
           />
 
           <div className={styles.separator} />

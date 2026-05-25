@@ -6,6 +6,7 @@ import {
   COMPOSITE_FRAG,
   BLIT_FRAG,
   GRID_FRAG,
+  TILE_FRAG,
 } from './shaders';
 
 interface ShaderProgram {
@@ -44,6 +45,7 @@ export class RenderingEngine {
   private compositeProg!: ShaderProgram;
   private blitProg!: ShaderProgram;
   private gridProg!: ShaderProgram;
+  private tileProg!: ShaderProgram;
   private quadVAO!: WebGLVertexArrayObject;
   private quadVBO!: WebGLBuffer;
   private fboA!: FBOTarget;
@@ -61,6 +63,8 @@ export class RenderingEngine {
   private dirty: DirtyFlags = DirtyFlag.FULL;
   private showGrid = false;
   private showCheckerboard = true;
+  private tileMode = false;
+  private mirrorMode: { h: boolean; v: boolean } = { h: false, v: false };
   private rafId: number | null = null;
 
   // Scratch (in-progress stroke preview)
@@ -69,6 +73,16 @@ export class RenderingEngine {
   private scratchClearPending = false;
   private scratchErase = false;
   private activeLayerId = '';
+
+  // Reference image overlay
+  private referenceTexture: WebGLTexture | null = null;
+  private referenceW = 0;
+  private referenceH = 0;
+  private referenceOpacity = 0.5;
+  private referenceVisible = true;
+  private referenceX = 0;
+  private referenceY = 0;
+  private pendingReferenceData: Uint8ClampedArray | null = null;
 
   // Onion skinning — up to 5 prev + 5 next tinted overlays
   private static readonly MAX_ONION = 5;
@@ -113,6 +127,10 @@ export class RenderingEngine {
     this.gridProg = this.compileProgram(QUAD_VERT, GRID_FRAG, {
       attribs: ['a_position'],
       uniforms: ['u_ndcMin', 'u_ndcMax', 'u_quadScreenSize', 'u_zoom', 'u_color'],
+    });
+    this.tileProg = this.compileProgram(QUAD_VERT, TILE_FRAG, {
+      attribs: ['a_position'],
+      uniforms: ['u_ndcMin', 'u_ndcMax', 'u_texture', 'u_resolution', 'u_canvasSize', 'u_panOffset', 'u_zoom'],
     });
 
     this.quadVAO = gl.createVertexArray();
@@ -218,6 +236,18 @@ export class RenderingEngine {
     }
   }
 
+  setTileMode(on: boolean): void {
+    if (this.tileMode !== on) {
+      this.tileMode = on;
+      this.markDirty(DirtyFlag.FULL);
+    }
+  }
+
+  setMirrorMode(mode: { h: boolean; v: boolean }): void {
+    this.mirrorMode = mode;
+    this.markDirty(DirtyFlag.OVERLAY);
+  }
+
   /** Uploads in-progress stroke pixels to the scratch GPU texture. */
   updateScratch(data: Uint8ClampedArray): void {
     this.pendingScratch = data;
@@ -251,6 +281,44 @@ export class RenderingEngine {
       this.activeLayerId = id;
       this.markDirty(DirtyFlag.OVERLAY);
     }
+  }
+
+  // ── Reference image ──────────────────────────────────────────────────────────
+
+  setReferenceImage(pixels: Uint8ClampedArray, w: number, h: number): void {
+    this.referenceW = w;
+    this.referenceH = h;
+    this.pendingReferenceData = pixels;
+    this.referenceVisible = true;
+    this.markDirty(DirtyFlag.OVERLAY);
+  }
+
+  setReferenceOpacity(v: number): void {
+    this.referenceOpacity = v;
+    this.markDirty(DirtyFlag.OVERLAY);
+  }
+
+  setReferenceVisible(v: boolean): void {
+    this.referenceVisible = v;
+    this.markDirty(DirtyFlag.OVERLAY);
+  }
+
+  setReferencePosition(x: number, y: number): void {
+    this.referenceX = x;
+    this.referenceY = y;
+    this.markDirty(DirtyFlag.OVERLAY);
+  }
+
+  clearReference(): void {
+    const { gl } = this;
+    if (this.referenceTexture) {
+      gl.deleteTexture(this.referenceTexture);
+      this.referenceTexture = null;
+    }
+    this.pendingReferenceData = null;
+    this.referenceW = 0;
+    this.referenceH = 0;
+    this.markDirty(DirtyFlag.OVERLAY);
   }
 
   // ── Render loop ─────────────────────────────────────────────────────────────
@@ -293,6 +361,24 @@ export class RenderingEngine {
     return [px[0]!, px[1]!, px[2]!, px[3]!];
   }
 
+  readAllPixels(): Uint8ClampedArray {
+    const { gl, fboA } = this;
+    const size = this.canvasW * this.canvasH * 4;
+    const raw = new Uint8Array(size);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fboA.fbo);
+    gl.readPixels(0, 0, this.canvasW, this.canvasH, gl.RGBA, gl.UNSIGNED_BYTE, raw);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    // Flip Y — GL origin is bottom-left, canvas origin is top-left
+    const result = new Uint8ClampedArray(size);
+    const rowBytes = this.canvasW * 4;
+    for (let y = 0; y < this.canvasH; y++) {
+      const src = (this.canvasH - 1 - y) * rowBytes;
+      const dst = y * rowBytes;
+      result.set(raw.subarray(src, src + rowBytes), dst);
+    }
+    return result;
+  }
+
   dispose(): void {
     this.stop();
     const { gl } = this;
@@ -303,9 +389,13 @@ export class RenderingEngine {
     for (const fbo of [...this.onionPrevFBOs, ...this.onionNextFBOs]) {
       this.deleteFBO(fbo);
     }
+    if (this.referenceTexture) {
+      gl.deleteTexture(this.referenceTexture);
+      this.referenceTexture = null;
+    }
     gl.deleteBuffer(this.quadVBO);
     gl.deleteVertexArray(this.quadVAO);
-    for (const p of [this.checkerProg, this.compositeProg, this.blitProg, this.gridProg]) {
+    for (const p of [this.checkerProg, this.compositeProg, this.blitProg, this.gridProg, this.tileProg]) {
       gl.deleteProgram(p.program);
     }
   }
@@ -360,6 +450,26 @@ export class RenderingEngine {
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
       this.pendingScratch = null;
     }
+    // Upload pending reference image data
+    if (this.pendingReferenceData) {
+      const { gl } = this;
+      if (!this.referenceTexture) {
+        const tex = gl.createTexture();
+        if (!tex) throw new Error('Failed to create reference texture');
+        this.referenceTexture = tex;
+        gl.bindTexture(gl.TEXTURE_2D, this.referenceTexture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      } else {
+        gl.bindTexture(gl.TEXTURE_2D, this.referenceTexture);
+      }
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.referenceW, this.referenceH, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.pendingReferenceData);
+      gl.bindTexture(gl.TEXTURE_2D, null);
+      this.pendingReferenceData = null;
+    }
+
     // Upload pending onion frames — only when setOnionFrames was explicitly called
     if (this.onionPendingUpdate) {
       for (let i = 0; i < this.pendingOnionPrev.length; i++) {
@@ -520,6 +630,30 @@ export class RenderingEngine {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
+    // 1b. Reference image (drawn before layers, after checkerboard)
+    if (this.referenceTexture && this.referenceVisible && this.referenceOpacity > 0) {
+      const { panX, panY, zoom } = this.transform;
+      const { viewportW: vw, viewportH: vh } = this;
+      const rScreenL = panX + this.referenceX * zoom;
+      const rScreenT = panY + this.referenceY * zoom;
+      const rScreenR = rScreenL + this.referenceW * zoom;
+      const rScreenB = rScreenT + this.referenceH * zoom;
+      const rMinX = (rScreenL / vw) * 2 - 1;
+      const rMinY = 1 - (rScreenT / vh) * 2;
+      const rMaxX = (rScreenR / vw) * 2 - 1;
+      const rMaxY = 1 - (rScreenB / vh) * 2;
+      this.setNdcUniforms(this.blitProg, rMinX, rMinY, rMaxX, rMaxY);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.referenceTexture);
+      gl.uniform1i(u(this.blitProg, 'u_texture'), 0);
+      gl.uniform1i(u(this.blitProg, 'u_eraseMode'), 0);
+      gl.uniform1f(u(this.blitProg, 'u_globalAlpha'), this.referenceOpacity);
+      gl.uniform4f(u(this.blitProg, 'u_tintColor'), 0, 0, 0, 0);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      // Restore canvas NDC for subsequent passes
+      this.setNdcUniforms(this.blitProg, minX, minY, maxX, maxY);
+    }
+
     // 2a. Onion skin — prev frames (red tint), rendered before the composite
     for (let i = this.onionPrevCount - 1; i >= 0; i--) {
       const fbo = this.onionPrevFBOs[i];
@@ -548,13 +682,38 @@ export class RenderingEngine {
 
     // 2c. Blit composite FBO (alpha blended over checkerboard/onion).
     //     When erasing, the shader cuts holes via scratch alpha (no DST_OUT artifacts).
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.fboA.texture);
-    gl.uniform1i(u(this.blitProg, 'u_texture'), 0);
-    gl.uniform1i(u(this.blitProg, 'u_eraseMode'), 0); // erase handled in compositeToFBO
-    gl.uniform1f(u(this.blitProg, 'u_globalAlpha'), 1.0);
-    gl.uniform4f(u(this.blitProg, 'u_tintColor'), 0, 0, 0, 0);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    if (this.tileMode) {
+      // Tile mode: fullscreen quad sampling the canvas texture tiled 3×3.
+      gl.disable(gl.BLEND);
+      gl.useProgram(this.tileProg.program);
+      gl.bindVertexArray(this.quadVAO);
+      this.setNdcUniforms(this.tileProg, -1, 1, 1, -1);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.fboA.texture);
+      gl.uniform1i(u(this.tileProg, 'u_texture'), 0);
+      gl.uniform2f(u(this.tileProg, 'u_resolution'), this.viewportW, this.viewportH);
+      gl.uniform2f(u(this.tileProg, 'u_canvasSize'), this.canvasW, this.canvasH);
+      gl.uniform2f(u(this.tileProg, 'u_panOffset'), this.transform.panX, this.transform.panY);
+      gl.uniform1f(u(this.tileProg, 'u_zoom'), this.transform.zoom);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      // Restore blitProg state for scratch pass
+      gl.useProgram(this.blitProg.program);
+      gl.bindVertexArray(this.quadVAO);
+      this.setNdcUniforms(this.blitProg, minX, minY, maxX, maxY);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.scratchFBO.texture);
+      gl.uniform1i(u(this.blitProg, 'u_scratchTex'), 1);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    } else {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.fboA.texture);
+      gl.uniform1i(u(this.blitProg, 'u_texture'), 0);
+      gl.uniform1i(u(this.blitProg, 'u_eraseMode'), 0); // erase handled in compositeToFBO
+      gl.uniform1f(u(this.blitProg, 'u_globalAlpha'), 1.0);
+      gl.uniform4f(u(this.blitProg, 'u_tintColor'), 0, 0, 0, 0);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
 
     // 2d. Scratch SRC_OVER for non-erase preview (pencil/line)
     if (this.scratchActive && !this.scratchErase) {
@@ -577,6 +736,45 @@ export class RenderingEngine {
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.disable(gl.BLEND);
+    }
+
+    // 4. Mirror axis guide lines (1px cyan at 40% opacity)
+    if (this.mirrorMode.h || this.mirrorMode.v) {
+      const { panX, panY, zoom } = this.transform;
+      const vw = this.viewportW;
+      const vh = this.viewportH;
+
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.useProgram(this.gridProg.program);
+      gl.bindVertexArray(this.quadVAO);
+
+      if (this.mirrorMode.h) {
+        // Vertical line at canvas center X
+        const screenX = panX + (this.canvasW / 2) * zoom;
+        const ndcX = (screenX / vw) * 2 - 1;
+        const halfNdcPx = 1 / vw;
+        this.setNdcUniforms(this.gridProg, ndcX - halfNdcPx, minY, ndcX + halfNdcPx, maxY);
+        // zoom=2, quadSize=(1,1) → mod(v*1, 2) always < 1 → solid fill
+        gl.uniform2f(u(this.gridProg, 'u_quadScreenSize'), 1.0, 1.0);
+        gl.uniform1f(u(this.gridProg, 'u_zoom'), 2.0);
+        gl.uniform4f(u(this.gridProg, 'u_color'), 0.0, 1.0, 1.0, 0.4);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      }
+
+      if (this.mirrorMode.v) {
+        // Horizontal line at canvas center Y
+        const screenY = panY + (this.canvasH / 2) * zoom;
+        const ndcY = 1 - (screenY / vh) * 2;
+        const halfNdcPx = 1 / vh;
+        this.setNdcUniforms(this.gridProg, minX, ndcY + halfNdcPx, maxX, ndcY - halfNdcPx);
+        gl.uniform2f(u(this.gridProg, 'u_quadScreenSize'), 1.0, 1.0);
+        gl.uniform1f(u(this.gridProg, 'u_zoom'), 2.0);
+        gl.uniform4f(u(this.gridProg, 'u_color'), 0.0, 1.0, 1.0, 0.4);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      }
+
       gl.disable(gl.BLEND);
     }
 

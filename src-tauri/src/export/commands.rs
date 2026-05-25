@@ -4,6 +4,7 @@ use super::{
         ExportProgress, ExportResult, FrameSelection, PngExportOptions, SpritesheetExportOptions,
     },
     encode::{encode_png, write_png_file},
+    gif::{encode_gif, GifExportOptions},
     spritesheet::{build_sheet, build_sidecar_json},
 };
 use crate::fs_sandbox::safe_write_path;
@@ -152,5 +153,43 @@ pub async fn export_spritesheet(
 
     Ok(ExportResult {
         paths: result_paths,
+    })
+}
+
+// ── GIF export ────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn export_gif(
+    app: AppHandle,
+    options: GifExportOptions,
+) -> Result<ExportResult, String> {
+    let frame_count = options.project.frames.len();
+    if frame_count == 0 {
+        return Err("No frames to export".to_string());
+    }
+
+    let out_path = safe_write_path(std::path::Path::new(&options.output_path))
+        .map_err(|e| e.to_string())?;
+    if let Some(parent) = out_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Cannot create output dir: {e}"))?;
+    }
+
+    // Emit progress=0 so the UI shows the bar immediately
+    let _ = app.emit("export:progress", ExportProgress { done: 0, total: frame_count as u32 });
+
+    let gif_bytes = encode_gif(&options)?;
+
+    // Atomic write: tmp → rename
+    let tmp_path = out_path.with_extension("gif.tmp");
+    std::fs::write(&tmp_path, &gif_bytes)
+        .map_err(|e| format!("GIF write failed: {e}"))?;
+    std::fs::rename(&tmp_path, &out_path)
+        .map_err(|e| format!("GIF rename failed: {e}"))?;
+
+    let _ = app.emit("export:progress", ExportProgress { done: frame_count as u32, total: frame_count as u32 });
+
+    Ok(ExportResult {
+        paths: vec![out_path.to_string_lossy().into_owned()],
     })
 }

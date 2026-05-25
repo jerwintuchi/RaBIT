@@ -1,5 +1,8 @@
 import type { RGBA, Swatch, ImportedSwatch } from '../../core/DataModel';
-import { makeSwatch, parsePaletteFile } from '../../core/DataModel';
+import { makeSwatch, makePalette, parsePaletteFile } from '../../core/DataModel';
+import { useFrameStore } from '../useFrameStore';
+import { useLayerStore } from '../useLayerStore';
+import { resolveCell } from './frame-utils';
 import {
   AddSwatchCommand,
   RemoveSwatchCommand,
@@ -91,6 +94,49 @@ export function importSwatches(filename: string, text: string): void {
     const swatch = makeSwatch(item.color, item.name ?? null);
     useHistoryStore.getState().execute(new AddSwatchCommand(swatch, insertAt, getDeps()));
     insertAt++;
+  }
+}
+
+// ── Canvas color extraction ────────────────────────────────────────────────
+
+function collectCanvasColors(): number[] {
+  const { layers } = useLayerStore.getState();
+  const { frames, activeFrameIndex } = useFrameStore.getState();
+  const seen = new Set<number>();
+  for (const layer of layers) {
+    if (!layer.visible) continue;
+    const buf = resolveCell(frames, activeFrameIndex, layer.id);
+    if (!buf) continue;
+    for (let i = 0; i < buf.length; i += 4) {
+      if (buf[i + 3] === 0) continue;
+      const rgba = (((buf[i]! << 24) | (buf[i + 1]! << 16) | (buf[i + 2]! << 8) | buf[i + 3]!) >>> 0) as number;
+      seen.add(rgba);
+    }
+  }
+  return Array.from(seen);
+}
+
+/** Count unique non-transparent colors across all visible layers of the active frame. */
+export function countCanvasColors(): number {
+  return collectCanvasColors().length;
+}
+
+/**
+ * Build the palette from canvas colors.
+ * - `replace`: clears the palette and fills it with the canvas colors.
+ * - `append`: adds only colors not already present in the palette.
+ */
+export function buildFromCanvas(mode: 'replace' | 'append'): void {
+  const colors = collectCanvasColors();
+  if (colors.length === 0) return;
+  const store = usePaletteStore.getState();
+  if (mode === 'replace') {
+    store.setPalette({ ...makePalette({ name: store.palette.name }), swatches: colors.map((c) => makeSwatch(c)) });
+    return;
+  }
+  const existingColors = new Set(store.palette.swatches.map((s) => s.color));
+  for (const c of colors) {
+    if (!existingColors.has(c)) store.addSwatch(c);
   }
 }
 

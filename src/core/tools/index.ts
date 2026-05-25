@@ -10,3 +10,5 @@ export { MarqueeTool } from './MarqueeTool';
 export { EyedropperTool } from './EyedropperTool';
 export { HandTool } from './HandTool';
 export { ZoomTool } from './ZoomTool';
+export { MagicWandTool } from './MagicWandTool';
+export { LassoTool } from './LassoTool';

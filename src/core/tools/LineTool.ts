@@ -62,11 +62,20 @@ export class LineTool implements Tool {
     this.scratch!.fill(0);
     const [endX, endY] = this.constrainEndpoint(e.canvasX, e.canvasY, e.shiftKey);
     const sel = this.ctx.getSelection();
-    this.plotLine(this.startX, this.startY, endX, endY, (x, y) => {
-      if (x < 0 || y < 0 || x >= this.scratchW || y >= this.scratchH) return;
+    const W = this.scratchW;
+    const H = this.scratchH;
+    const paint = (x: number, y: number) => {
+      if (x < 0 || y < 0 || x >= W || y >= H) return;
       if (!isInSelection(sel, x, y)) return;
-      writePixel(this.scratch!, x, y, this.scratchW, this.color);
-    });
+      writePixel(this.scratch!, x, y, W, this.color);
+    };
+    const draw = (sx: number, sy: number, ex: number, ey: number) =>
+      this.plotLine(sx, sy, ex, ey, paint);
+    const { h: mH, v: mV } = this.ctx.getMirrorMode();
+    draw(this.startX, this.startY, endX, endY);
+    if (mH) draw(W - 1 - this.startX, this.startY, W - 1 - endX, endY);
+    if (mV) draw(this.startX, H - 1 - this.startY, endX, H - 1 - endY);
+    if (mH && mV) draw(W - 1 - this.startX, H - 1 - this.startY, W - 1 - endX, H - 1 - endY);
     this.ctx.updateScratch(this.scratch!);
   }
 
@@ -85,17 +94,24 @@ export class LineTool implements Tool {
 
     const [endX, endY] = this.constrainEndpoint(e.canvasX, e.canvasY, e.shiftKey);
     const w = this.scratchW;
+    const H = this.scratchH;
     const sel = this.ctx.getSelection();
     const deltas = new Map<number, PixelDelta>();
-    this.plotLine(this.startX, this.startY, endX, endY, (x, y) => {
-      if (x < 0 || y < 0 || x >= w || y >= this.scratchH) return;
+    const collectPixel = (x: number, y: number) => {
+      if (x < 0 || y < 0 || x >= w || y >= H) return;
       if (!isInSelection(sel, x, y)) return;
       const key = y * w + x;
       if (!deltas.has(key)) {
-        const before = readPixel(layerBuf, x, y, w);
-        deltas.set(key, { x, y, before, after: this.color });
+        deltas.set(key, { x, y, before: readPixel(layerBuf, x, y, w), after: this.color });
       }
-    });
+    };
+    const collect = (sx: number, sy: number, ex: number, ey: number) =>
+      this.plotLine(sx, sy, ex, ey, collectPixel);
+    const { h: mH, v: mV } = this.ctx.getMirrorMode();
+    collect(this.startX, this.startY, endX, endY);
+    if (mH) collect(w - 1 - this.startX, this.startY, w - 1 - endX, endY);
+    if (mV) collect(this.startX, H - 1 - this.startY, endX, H - 1 - endY);
+    if (mH && mV) collect(w - 1 - this.startX, H - 1 - this.startY, w - 1 - endX, H - 1 - endY);
 
     this.ctx.clearScratch();
     if (deltas.size === 0) return;

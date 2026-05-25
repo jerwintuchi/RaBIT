@@ -21,8 +21,8 @@ export type ToolId =
   | 'magic-wand';
 
 export interface PencilOptions {
-  size: number; // px, 1–64
-  opacity: number; // 0–1
+  size: number;
+  opacity: number;
   pixelPerfect: boolean;
 }
 
@@ -32,7 +32,7 @@ export interface EraserOptions {
 }
 
 export interface FillOptions {
-  tolerance: number; // 0–255
+  tolerance: number;
   contiguous: boolean;
 }
 
@@ -60,11 +60,26 @@ export type ToolOptions = {
   'magic-wand': { tolerance: number };
 };
 
+export interface SelectionClipboard {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+  originX: number;
+  originY: number;
+}
+
 interface ToolState {
   activeTool: ToolId;
-  previousTool: ToolId | null; // for Space-held hand-tool restore
+  previousTool: ToolId | null;
   options: ToolOptions;
   selection: SelectionMask | null;
+  /** Pixel offset applied to the marching-ants overlay while a move drag is in
+   *  progress. The SelectionMask itself stays frozen; only the visual changes. */
+  selectionDragOffset: { dx: number; dy: number } | null;
+  selectionClipboard: SelectionClipboard | null;
+  mirrorMode: { h: boolean; v: boolean };
+  /** Canvas-coordinate path points for the lasso tool's in-progress outline. */
+  lassoPreviewPath: Array<{ x: number; y: number }>;
 
   setActiveTool(id: ToolId): void;
   setPreviousTool(id: ToolId | null): void;
@@ -72,6 +87,10 @@ interface ToolState {
   setSelection(mask: SelectionMask | null): void;
   clearSelection(): void;
   invertSelection(): void;
+  setSelectionDragOffset(offset: { dx: number; dy: number } | null): void;
+  setSelectionClipboard(cb: SelectionClipboard | null): void;
+  setMirrorMode(mode: Partial<{ h: boolean; v: boolean }>): void;
+  setLassoPreviewPath(path: Array<{ x: number; y: number }>): void;
 }
 
 const defaultOptions: ToolOptions = {
@@ -90,14 +109,16 @@ const defaultOptions: ToolOptions = {
   'magic-wand': { tolerance: 32 },
 };
 
-
-
 export const useToolStore = create<ToolState>()(
   immer((set) => ({
     activeTool: 'pencil',
     previousTool: null,
     options: defaultOptions,
     selection: null,
+    selectionDragOffset: null,
+    selectionClipboard: null,
+    mirrorMode: { h: false, v: false },
+    lassoPreviewPath: [],
 
     setActiveTool(id) {
       set((s) => {
@@ -132,6 +153,30 @@ export const useToolStore = create<ToolState>()(
     invertSelection() {
       set((s) => {
         if (s.selection) s.selection.inverted = !s.selection.inverted;
+      });
+    },
+
+    setSelectionDragOffset(offset) {
+      set((s) => {
+        s.selectionDragOffset = offset;
+      });
+    },
+
+    setSelectionClipboard(cb) {
+      set((s) => {
+        s.selectionClipboard = cb;
+      });
+    },
+
+    setMirrorMode(mode) {
+      set((s) => {
+        Object.assign(s.mirrorMode, mode);
+      });
+    },
+
+    setLassoPreviewPath(path) {
+      set((s) => {
+        s.lassoPreviewPath = path;
       });
     },
   })),

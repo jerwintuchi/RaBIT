@@ -12,6 +12,8 @@ import {
   LuPipette,
   LuHand,
   LuZoomIn,
+  LuWand,
+  LuLasso,
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { Tooltip } from '../primitives';
@@ -43,7 +45,7 @@ const TOOLS: ToolDef[] = [
   {
     id: 'line',
     label: 'Line',
-    shortcut: 'L',
+    shortcut: 'N',
     description: 'Draw a straight pixel line',
     Icon: LuMinus,
   },
@@ -51,14 +53,14 @@ const TOOLS: ToolDef[] = [
     id: 'rectangle',
     label: 'Rectangle',
     shortcut: 'R',
-    description: 'Draw a rectangle outline · Shift = square',
+    description: 'Draw a rectangle outline - Shift = square',
     Icon: LuSquare,
   },
   {
     id: 'ellipse',
     label: 'Ellipse',
     shortcut: 'O',
-    description: 'Draw an ellipse outline · Shift = circle',
+    description: 'Draw an ellipse outline - Shift = circle',
     Icon: LuCircle,
   },
   {
@@ -79,8 +81,22 @@ const TOOLS: ToolDef[] = [
     id: 'marquee',
     label: 'Marquee',
     shortcut: 'M',
-    description: 'Rectangular selection · Shift = square',
+    description: 'Rectangular selection - Shift = square',
     Icon: LuSquareDashed,
+  },
+  {
+    id: 'lasso',
+    label: 'Lasso',
+    shortcut: 'L',
+    description: 'Freehand selection',
+    Icon: LuLasso,
+  },
+  {
+    id: 'magic-wand',
+    label: 'Magic Wand',
+    shortcut: 'W',
+    description: 'Select pixels by color similarity',
+    Icon: LuWand,
   },
   {
     id: 'eyedropper',
@@ -100,13 +116,15 @@ const TOOLS: ToolDef[] = [
     id: 'zoom',
     label: 'Zoom',
     shortcut: 'Z',
-    description: 'Click to zoom in · Alt+click to zoom out',
+    description: 'Click to zoom in - Alt+click to zoom out',
     Icon: LuZoomIn,
   },
 ];
 
 export function ToolBar(): JSX.Element {
   const activeTool = useToolStore((s) => s.activeTool);
+  const mirrorMode = useToolStore((s) => s.mirrorMode);
+  const pixelPerfect = useToolStore((s) => s.options.pencil.pixelPerfect);
 
   return (
     <div className={styles.toolbar} role="toolbar" aria-label="Tools">
@@ -135,6 +153,53 @@ export function ToolBar(): JSX.Element {
           </Tooltip>
         );
       })}
+
+      <div className={styles.separator} />
+
+      <Tooltip content="Pixel-Perfect" shortcut="P" description="Remove L-shaped elbows from diagonal strokes (pencil/eraser)" placement="right">
+        <button
+          type="button"
+          className={`${styles.toolButton} ${pixelPerfect ? styles.active : ''}`}
+          aria-label="Pixel Perfect"
+          aria-pressed={pixelPerfect}
+          onClick={(e) => {
+            useToolStore.getState().updateOptions('pencil', { pixelPerfect: !pixelPerfect });
+            e.currentTarget.blur();
+          }}
+        >
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '-0.5px' }}>PP</span>
+        </button>
+      </Tooltip>
+
+      <Tooltip content="Mirror H" shortcut="Y" description="Mirror strokes horizontally" placement="right">
+        <button
+          type="button"
+          className={`${styles.toolButton} ${mirrorMode.h ? styles.active : ''}`}
+          aria-label="Mirror Horizontal"
+          aria-pressed={mirrorMode.h}
+          onClick={(e) => {
+            useToolStore.getState().setMirrorMode({ h: !mirrorMode.h });
+            e.currentTarget.blur();
+          }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '-0.5px' }}>MH</span>
+        </button>
+      </Tooltip>
+
+      <Tooltip content="Mirror V" shortcut="Shift+Y" description="Mirror strokes vertically" placement="right">
+        <button
+          type="button"
+          className={`${styles.toolButton} ${mirrorMode.v ? styles.active : ''}`}
+          aria-label="Mirror Vertical"
+          aria-pressed={mirrorMode.v}
+          onClick={(e) => {
+            useToolStore.getState().setMirrorMode({ v: !mirrorMode.v });
+            e.currentTarget.blur();
+          }}
+        >
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '-0.5px' }}>MV</span>
+        </button>
+      </Tooltip>
     </div>
   );
 }

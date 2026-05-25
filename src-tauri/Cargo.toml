@@ -41,6 +41,13 @@ tokio = { version = "1", features = ["sync", "time"] }
 # M11: PNG export
 png = "0.17"
 
+# M14: GIF export
+gif = "0.13"
+imagequant = "4"
+
+# M14: image decode for reference image + selection BFS
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+
 # Added as their owning milestones arrive:
 # M5:  rayon (flood fill)
 # M10: (uses existing serde_json for the autosave manifest)

@@ -18,6 +18,7 @@ interface ProjectMeta {
 interface ProjectState {
   meta: ProjectMeta;
   canvas: CanvasConfig;
+  referencePath: string | null;
 
   setName(name: string, markDirty?: boolean): void;
   setFilePath(path: string | null): void;
@@ -25,6 +26,7 @@ interface ProjectState {
   markSaved(): void;
   setProjectId(id: string): void;
   setCanvasConfig(config: Partial<CanvasConfig>): void;
+  setReferencePath(path: string | null): void;
   resetProject(
     meta: Partial<ProjectMeta>,
     canvas?: Partial<CanvasConfig>,
@@ -45,6 +47,7 @@ export const useProjectStore = create<ProjectState>()(
       modifiedAt: null,
     },
     canvas: makeCanvasConfig(32, 32),
+    referencePath: null,
 
     setName(name, markDirty = true) {
       set((s) => {
@@ -81,6 +84,13 @@ export const useProjectStore = create<ProjectState>()(
     setCanvasConfig(config) {
       set((s) => {
         Object.assign(s.canvas, config);
+        s.meta.dirty = true;
+      });
+    },
+
+    setReferencePath(path) {
+      set((s) => {
+        s.referencePath = path;
         s.meta.dirty = true;
       });
     },

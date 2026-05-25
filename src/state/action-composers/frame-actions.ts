@@ -18,6 +18,7 @@ import { useProjectStore } from '../useProjectStore';
 import { useHistoryStore } from '../useHistoryStore';
 import { getEngine, DirtyFlag } from '../renderBridge';
 import { cloneCell, resolveCell } from './frame-utils';
+import { shiftTagsForInsert, shiftTagsForDelete } from './tagActions';
 
 function cloneFrameCells(src: { cells: Record<LayerId, Cell> }): Record<LayerId, Cell> {
   const cells: Record<LayerId, Cell> = {};
@@ -37,9 +38,13 @@ function getDeps(): FrameCommandDeps {
         frames.splice(index, 0, frame);
         return { frames };
       });
+      shiftTagsForInsert(index);
     },
     removeFrame(id) {
+      const { frames } = useFrameStore.getState();
+      const at = frames.findIndex((f) => f.id === id);
       useFrameStore.getState().removeFrame(id);
+      if (at >= 0) shiftTagsForDelete(at);
     },
     setFrames(frames) {
       useFrameStore.getState().setFrames(frames);

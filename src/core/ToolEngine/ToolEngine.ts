@@ -37,8 +37,18 @@ export class ToolEngine {
   setActiveTool(id: ToolId): void {
     const next = this.tools.get(id);
     if (!next) return;
-    if (this.active && this.active !== next) this.active.onCancel();
+    if (this.active && this.active !== next) {
+      if (this.active.onDeactivate) this.active.onDeactivate();
+      else this.active.onCancel();
+    }
     this.active = next;
+  }
+
+  /** Commit any pending floating-selection state on the active tool without
+   *  switching tools. Called by action-composers before operations that would
+   *  conflict with an active float (deselect, delete, cut, selectAll). */
+  commitPendingOps(): void {
+    this.active?.onDeactivate?.();
   }
 
   getActiveTool(): Tool | null {

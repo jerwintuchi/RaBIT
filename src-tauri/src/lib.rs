@@ -8,8 +8,9 @@
 //! - `prefs`        -> M9  (preferences.toml + recent files)
 //! - `file_watcher` -> M9  (external file change detection)
 //! - `auto_save`    -> M10
-//! - `export`       -> M11 (PNG + spritesheet)
-//! - `flood_fill`   -> M5  (scanline flood fill via rayon)
+//! - `export`       -> M11 (PNG + spritesheet); M14 adds GIF
+//! - `reference`    -> M14 (reference image decode)
+//! - `selection`    -> M14 (Rust BFS for Magic Wand on large canvases)
 
 mod auto_save;
 mod export;
@@ -17,12 +18,16 @@ mod file_watcher;
 mod fs_sandbox;
 mod prefs;
 mod project_io;
+mod reference;
+mod selection;
 
 use auto_save::{
     auto_save_check_recovery, auto_save_discard, auto_save_mark_clean, auto_save_restore,
     auto_save_write,
 };
-use export::commands::{export_png, export_spritesheet};
+use export::commands::{export_gif, export_png, export_spritesheet};
+use reference::load_reference_image;
+use selection::compute_selection;
 use file_watcher::FileWatcher;
 use prefs::{prefs_load, prefs_reset, prefs_save};
 use project_io::commands::{
@@ -75,6 +80,9 @@ pub fn run() {
             auto_save_mark_clean,
             export_png,
             export_spritesheet,
+            export_gif,
+            load_reference_image,
+            compute_selection,
             prefs_load,
             prefs_save,
             prefs_reset,

@@ -32,6 +32,9 @@ export abstract class BrushTool implements Tool {
   private deltas = new Map<number, PixelDelta>();
   private color: RGBA = 0;
 
+  // Pixel-perfect: tracks the last 3 main-path positions to detect L-shaped elbows.
+  private _ppHistory: { x: number; y: number }[] = [];
+
   protected constructor(protected readonly ctx: ToolEngineContext) {}
 
   /** Called per-stroke to determine the paint color (e.g. primary or transparent). */
@@ -68,6 +71,7 @@ export abstract class BrushTool implements Tool {
     this.layerBuf = layerBuf;
     this.color = this.resolvePaintColor();
     this.deltas.clear();
+    this._ppHistory.length = 0;
 
     this.paintPixel(e.canvasX, e.canvasY);
     this.lastX = e.canvasX;
@@ -120,6 +124,7 @@ export abstract class BrushTool implements Tool {
     this.layerId = null;
     this.layerBuf = null;
     this.deltas.clear();
+    this._ppHistory.length = 0;
     this.ctx.clearScratch();
   }
 
@@ -146,6 +151,69 @@ export abstract class BrushTool implements Tool {
       this.deltas.set(key, { x, y, before, after: this.color });
     }
     writePixel(this.scratch, x, y, w, this.scratchColor());
+
+    // Pixel-perfect: track main-path history (skip duplicates from plotLine
+    // re-painting the segment start pixel) and remove L-shaped elbows.
+    if (this.ctx.getPixelPerfect()) {
+      const last = this._ppHistory[this._ppHistory.length - 1];
+      if (!last || last.x !== x || last.y !== y) {
+        this._ppHistory.push({ x, y });
+        if (this._ppHistory.length > 3) this._ppHistory.shift();
+        if (this._ppHistory.length === 3) this._checkElbow();
+      }
+    }
+
+    // Mirror mode: paint mirrored coordinates
+    const { h: mH, v: mV } = this.ctx.getMirrorMode();
+    const mx = w - 1 - x;
+    const my = h - 1 - y;
+    if (mH && mx !== x) this.paintPixelRaw(mx, y, w, h);
+    if (mV && my !== y) this.paintPixelRaw(x, my, w, h);
+    if (mH && mV && mx !== x && my !== y) this.paintPixelRaw(mx, my, w, h);
+  }
+
+  private paintPixelRaw(x: number, y: number, w: number, h: number): void {
+    if (x < 0 || y < 0 || x >= w || y >= h) return;
+    if (!this.scratch || !this.layerBuf) return;
+    const key = y * w + x;
+    if (!this.deltas.has(key)) {
+      const before = readPixel(this.layerBuf, x, y, w);
+      this.deltas.set(key, { x, y, before, after: this.color });
+    }
+    writePixel(this.scratch, x, y, w, this.scratchColor());
+  }
+
+  private _checkElbow(): void {
+    const p0 = this._ppHistory[0]!;
+    const p1 = this._ppHistory[1]!;
+    const p2 = this._ppHistory[2]!;
+    const isElbow =
+      (p1.x === p0.x && p1.y === p2.y) ||
+      (p1.y === p0.y && p1.x === p2.x);
+    if (!isElbow) return;
+    this._eraseFromStroke(p1.x, p1.y);
+    // Also erase mirrored elbow pixels so mirror mode stays consistent.
+    const w = this.scratchW;
+    const h = this.scratchH;
+    const { h: mH, v: mV } = this.ctx.getMirrorMode();
+    const mx = w - 1 - p1.x;
+    const my = h - 1 - p1.y;
+    if (mH && mx !== p1.x) this._eraseFromStroke(mx, p1.y);
+    if (mV && my !== p1.y) this._eraseFromStroke(p1.x, my);
+    if (mH && mV && mx !== p1.x && my !== p1.y) this._eraseFromStroke(mx, my);
+  }
+
+  private _eraseFromStroke(x: number, y: number): void {
+    if (!this.scratch) return;
+    // For paint strokes restore the committed layer pixel so it remains visible
+    // through the scratch. For erase strokes (color=0) keep scratch transparent
+    // so the DST_OUT pass does not cut through the layer at this pixel.
+    const restore =
+      this.color !== 0 && this.layerBuf
+        ? readPixel(this.layerBuf, x, y, this.scratchW)
+        : 0;
+    writePixel(this.scratch, x, y, this.scratchW, restore);
+    this.deltas.delete(y * this.scratchW + x);
   }
 
   private plotLine(x0: number, y0: number, x1: number, y1: number): void {

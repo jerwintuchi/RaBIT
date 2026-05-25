@@ -1,4 +1,4 @@
-export {
+﻿export {
   goToFrame,
   goToNextFrame,
   goToPrevFrame,
@@ -22,3 +22,9 @@ export { resolvePendingDiscard } from './file-actions';
 export * as canvasActions from './canvasActions';
 
 export * as exportActions from './exportActions';
+
+export * as selectionActions from './selectionActions';
+
+export * as layerFxActions from './layerFxActions';
+
+export * as tagActions from './tagActions';

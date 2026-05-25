@@ -90,4 +90,7 @@ export interface Project {
   activeFrameIndex: number;
   zoomLevel: number;
   panOffset: { x: number; y: number };
+
+  // Reference image (optional, not part of artwork)
+  referencePath?: string | null;
 }

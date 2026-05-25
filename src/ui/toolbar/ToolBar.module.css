@@ -45,3 +45,10 @@
   width: 18px;
   height: 18px;
 }
+
+.separator {
+  width: 28px;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--space-1) 0;
+}

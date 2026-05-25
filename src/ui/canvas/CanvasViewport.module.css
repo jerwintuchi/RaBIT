@@ -58,6 +58,15 @@
   overflow: visible;
 }
 
+/* Full-viewport SVG overlay for the lasso tool's in-progress path */
+.lassoOverlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 15;
+  overflow: visible;
+}
+
 /* Pixel-accurate crosshair — outlines the canvas pixel under the cursor */
 .pixelCrosshair {
   position: absolute;

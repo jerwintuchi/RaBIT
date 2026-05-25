@@ -55,3 +55,39 @@ export function setOnionFrames(
 ): void {
   _engine?.setOnionFrames(prev, next, opacity);
 }
+
+export function readAllCompositedPixels(): Uint8ClampedArray | null {
+  return _engine?.readAllPixels() ?? null;
+}
+
+export function setEngineTileMode(on: boolean): void {
+  _engine?.setTileMode(on);
+}
+
+export function setEngineMirrorMode(mode: { h: boolean; v: boolean }): void {
+  _engine?.setMirrorMode(mode);
+}
+
+export function setEngineReferenceImage(
+  pixels: Uint8ClampedArray,
+  w: number,
+  h: number,
+): void {
+  _engine?.setReferenceImage(pixels, w, h);
+}
+
+export function setEngineReferenceOpacity(v: number): void {
+  _engine?.setReferenceOpacity(v);
+}
+
+export function setEngineReferenceVisible(v: boolean): void {
+  _engine?.setReferenceVisible(v);
+}
+
+export function setEngineReferencePosition(x: number, y: number): void {
+  _engine?.setReferencePosition(x, y);
+}
+
+export function clearEngineReference(): void {
+  _engine?.clearReference();
+}

@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { CanvasEmptyState } from './CanvasEmptyState';
 import {
   LuPencil, LuEraser, LuMinus, LuPipette,
-  LuSquare, LuCircle, LuPaintBucket, LuMove, LuSquareDashed,
+  LuSquare, LuCircle, LuPaintBucket, LuMove, LuSquareDashed, LuWand,
 } from 'react-icons/lu';
 import { useProjectStore } from '../../state/useProjectStore';
 import { useLayerStore } from '../../state/useLayerStore';
@@ -19,6 +19,7 @@ import {
   toolPointerDown,
   toolPointerMove,
   toolPointerUp,
+  commitFloatingSelection,
 } from '../../state/toolBridge';
 import { resolveCell } from '../../state/action-composers/frame-utils';
 import { drawActions } from '../../state/action-composers';
@@ -35,6 +36,8 @@ export function CanvasViewport(): JSX.Element {
   const { zoomLevel, panOffset, showGrid, showCheckerboard, cursorPosition, onionSkin } = useUIStore();
   const activeTool = useToolStore((s) => s.activeTool);
   const selection = useToolStore((s) => s.selection);
+  const selectionDragOffset = useToolStore((s) => s.selectionDragOffset);
+  const lassoPreviewPath = useToolStore((s) => s.lassoPreviewPath);
   const activeLayerLocked =
     layers.find((l) => l.id === activeLayerId)?.locked === true;
 
@@ -174,15 +177,24 @@ export function CanvasViewport(): JSX.Element {
   // Global keyboard shortcuts for tool switching
   useEffect(() => {
     const TOOL_KEYS: Record<string, string> = {
-      b: 'pencil', e: 'eraser', l: 'line',
+      b: 'pencil', e: 'eraser', n: 'line', l: 'lasso',
       r: 'rectangle', o: 'ellipse', g: 'fill',
-      v: 'move', m: 'marquee',
+      v: 'move', m: 'marquee', w: 'magic-wand',
       i: 'eyedropper', h: 'hand', z: 'zoom',
     };
     const onKey = (ev: KeyboardEvent) => {
       const tag = (ev.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      if (ev.key === 'Escape') { useToolStore.getState().clearSelection(); return; }
+      if (ev.key === 'Escape') { commitFloatingSelection(); useToolStore.getState().clearSelection(); return; }
+      // P — toggle pixel-perfect (pencil/eraser only)
+      if (ev.key.toLowerCase() === 'p' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+        const t = useToolStore.getState().activeTool;
+        if (t === 'pencil' || t === 'eraser') {
+          const cur = useToolStore.getState().options.pencil.pixelPerfect;
+          useToolStore.getState().updateOptions('pencil', { pixelPerfect: !cur });
+          return;
+        }
+      }
       // Ctrl+I — invert active selection
       if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'i') {
         ev.preventDefault();
@@ -220,7 +232,7 @@ export function CanvasViewport(): JSX.Element {
     const baseCursor: Record<string, string> = {
       pencil: 'none', eraser: 'none', line: 'none',
       rectangle: 'none', ellipse: 'none', fill: 'none', marquee: 'crosshair',
-      eyedropper: 'none',
+      eyedropper: 'none', 'magic-wand': 'none',
       move: 'move',
       hand: 'grab',
       zoom: 'zoom-in',
@@ -231,14 +243,19 @@ export function CanvasViewport(): JSX.Element {
     if (!blockedByLock && activeTool === 'marquee' && selection && selection.data.length > 1 && cursorPosition) {
       const { bounds, data, width } = selection;
       const { x, y } = cursorPosition;
-      const inBounds = x >= bounds.x && x < bounds.x + bounds.w && y >= bounds.y && y < bounds.y + bounds.h;
-      if (inBounds && data[y * width + x] === 1) cursor = 'grab';
+      const odx = selectionDragOffset?.dx ?? 0;
+      const ody = selectionDragOffset?.dy ?? 0;
+      const bx = bounds.x + odx;
+      const by = bounds.y + ody;
+      const inBounds = x >= bx && x < bx + bounds.w && y >= by && y < by + bounds.h;
+      // Un-translate to check against the frozen mask data at original positions
+      if (inBounds && data[(y - ody) * width + (x - odx)] === 1) cursor = 'grab';
     }
 
     if (containerRef.current) {
       containerRef.current.style.cursor = cursor;
     }
-  }, [activeTool, activeLayerLocked, selection, cursorPosition]);
+  }, [activeTool, activeLayerLocked, selection, selectionDragOffset, cursorPosition]);
 
   // Tool pointer event routing — runs in addition to useViewportInteraction's pan handlers
   useEffect(() => {
@@ -296,10 +313,37 @@ export function CanvasViewport(): JSX.Element {
     };
   }, [inputClaimedRef]);
 
+  // Build an SVG path tracing the actual pixel boundaries of the selection mask.
+  // Each selected pixel contributes one edge segment per side that borders an
+  // unselected neighbour (or the canvas boundary). Falls back to null when the
+  // selection is a draft rect (data.length <= 1), which keeps the simple <rect>.
+  const selectionEdgePath = useMemo(() => {
+    if (!selection || selection.data.length <= 1) return null;
+    const { data, width: mw, height: mh, bounds } = selection;
+    const z = zoomLevel;
+    const segs: string[] = [];
+    const isSel = (px: number, py: number): boolean => {
+      if (px < 0 || py < 0 || px >= mw || py >= mh) return false;
+      return data[py * mw + px] === 1;
+    };
+    for (let py = bounds.y; py < bounds.y + bounds.h; py++) {
+      for (let px = bounds.x; px < bounds.x + bounds.w; px++) {
+        if (!isSel(px, py)) continue;
+        const ex = (px - bounds.x) * z;
+        const ey = (py - bounds.y) * z;
+        if (!isSel(px, py - 1)) segs.push(`M${ex},${ey}L${ex + z},${ey}`);
+        if (!isSel(px, py + 1)) segs.push(`M${ex},${ey + z}L${ex + z},${ey + z}`);
+        if (!isSel(px - 1, py)) segs.push(`M${ex},${ey}L${ex},${ey + z}`);
+        if (!isSel(px + 1, py)) segs.push(`M${ex + z},${ey}L${ex + z},${ey + z}`);
+      }
+    }
+    return segs.length > 0 ? segs.join(' ') : null;
+  }, [selection, zoomLevel]);
+
   // Pixel crosshair — shown for drawing tools so the user can see which pixel
   // will be affected before clicking. Move uses the OS 'move' cursor instead.
   const CROSSHAIR_TOOLS = new Set([
-    'pencil', 'eraser', 'line', 'rectangle', 'ellipse', 'fill', 'eyedropper',
+    'pencil', 'eraser', 'line', 'rectangle', 'ellipse', 'fill', 'eyedropper', 'magic-wand',
   ]);
   // move and marquee get the icon overlay but not the pixel-box crosshair
   const showCrosshair = CROSSHAIR_TOOLS.has(activeTool) && cursorPosition != null;
@@ -317,6 +361,7 @@ export function CanvasViewport(): JSX.Element {
     move:      <LuMove size={14} />,
     marquee:   <LuSquareDashed size={14} />,
     eyedropper:<LuPipette size={14} />,
+    'magic-wand': <LuWand size={14} />,
   };
 
   // Viewport chrome values
@@ -337,9 +382,13 @@ export function CanvasViewport(): JSX.Element {
         const cp = useUIStore.getState().cursorPosition;
         if (cp) {
           const { bounds, data, width } = sel;
-          const inBounds = cp.x >= bounds.x && cp.x < bounds.x + bounds.w &&
-                           cp.y >= bounds.y && cp.y < bounds.y + bounds.h;
-          if (inBounds && data[cp.y * width + cp.x] === 1) return;
+          const odx = useToolStore.getState().selectionDragOffset?.dx ?? 0;
+          const ody = useToolStore.getState().selectionDragOffset?.dy ?? 0;
+          const bx = bounds.x + odx;
+          const by = bounds.y + ody;
+          const inBounds = cp.x >= bx && cp.x < bx + bounds.w &&
+                           cp.y >= by && cp.y < by + bounds.h;
+          if (inBounds && data[(cp.y - ody) * width + (cp.x - odx)] === 1) return;
         }
         useToolStore.getState().clearSelection();
       }}
@@ -373,8 +422,10 @@ export function CanvasViewport(): JSX.Element {
         </>
       )}
       {selection && (() => {
-        const sx = selection.bounds.x * zoomLevel + panOffset.x;
-        const sy = selection.bounds.y * zoomLevel + panOffset.y;
+        const odx = selectionDragOffset?.dx ?? 0;
+        const ody = selectionDragOffset?.dy ?? 0;
+        const sx = (selection.bounds.x + odx) * zoomLevel + panOffset.x;
+        const sy = (selection.bounds.y + ody) * zoomLevel + panOffset.y;
         const sw = selection.bounds.w * zoomLevel;
         const sh = selection.bounds.h * zoomLevel;
         // Inverted selection uses amber/orange ants to signal "drawing outside"
@@ -385,17 +436,64 @@ export function CanvasViewport(): JSX.Element {
             style={{ left: sx, top: sy, width: sw, height: sh }}
             viewBox={`0 0 ${sw} ${sh}`}
           >
-            <rect x={0.5} y={0.5} width={sw - 1} height={sh - 1}
-              fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={1}
-              strokeDasharray="4 4"
-            />
-            <rect x={0.5} y={0.5} width={sw - 1} height={sh - 1}
-              fill="none" stroke={antColor} strokeWidth={1}
-              strokeDasharray="4 4" strokeDashoffset="4"
-            >
-              <animate attributeName="stroke-dashoffset" from="0" to="8"
-                dur="0.4s" repeatCount="indefinite" />
-            </rect>
+            {selectionEdgePath ? (
+              <>
+                <path d={selectionEdgePath}
+                  fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={1}
+                  strokeDasharray="4 4"
+                />
+                <path d={selectionEdgePath}
+                  fill="none" stroke={antColor} strokeWidth={1}
+                  strokeDasharray="4 4" strokeDashoffset="4"
+                >
+                  <animate attributeName="stroke-dashoffset" from="0" to="8"
+                    dur="0.4s" repeatCount="indefinite" />
+                </path>
+              </>
+            ) : (
+              <>
+                <rect x={0.5} y={0.5} width={sw - 1} height={sh - 1}
+                  fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={1}
+                  strokeDasharray="4 4"
+                />
+                <rect x={0.5} y={0.5} width={sw - 1} height={sh - 1}
+                  fill="none" stroke={antColor} strokeWidth={1}
+                  strokeDasharray="4 4" strokeDashoffset="4"
+                >
+                  <animate attributeName="stroke-dashoffset" from="0" to="8"
+                    dur="0.4s" repeatCount="indefinite" />
+                </rect>
+              </>
+            )}
+          </svg>
+        );
+      })()}
+      {lassoPreviewPath.length >= 2 && (() => {
+        const toVP = (p: { x: number; y: number }) =>
+          `${(p.x + 0.5) * zoomLevel + panOffset.x},${(p.y + 0.5) * zoomLevel + panOffset.y}`;
+        const pts = lassoPreviewPath.map(toVP).join(' ');
+        const start = lassoPreviewPath[0]!;
+        const last  = lassoPreviewPath[lassoPreviewPath.length - 1]!;
+        const sx = (start.x + 0.5) * zoomLevel + panOffset.x;
+        const sy = (start.y + 0.5) * zoomLevel + panOffset.y;
+        const lx = (last.x + 0.5) * zoomLevel + panOffset.x;
+        const ly = (last.y + 0.5) * zoomLevel + panOffset.y;
+        const r = Math.max(3, zoomLevel * 0.5);
+        return (
+          <svg className={styles.lassoOverlay}>
+            {/* Path drawn so far */}
+            <polyline points={pts} fill="none" stroke="rgba(0,0,0,0.6)" strokeWidth={1} strokeDasharray="4 4" />
+            <polyline points={pts} fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth={1} strokeDasharray="4 4" strokeDashoffset="4">
+              <animate attributeName="stroke-dashoffset" from="0" to="8" dur="0.4s" repeatCount="indefinite" />
+            </polyline>
+            {/* Closing line: faint guide from cursor back to start */}
+            {lassoPreviewPath.length >= 3 && (
+              <line x1={lx} y1={ly} x2={sx} y2={sy}
+                stroke="rgba(255,255,255,0.35)" strokeWidth={1} strokeDasharray="3 3" />
+            )}
+            {/* Start-point dot — shows where the lasso will close */}
+            <circle cx={sx} cy={sy} r={r + 1} fill="rgba(0,0,0,0.6)" />
+            <circle cx={sx} cy={sy} r={r} fill="rgba(255,255,255,0.9)" />
           </svg>
         );
       })()}

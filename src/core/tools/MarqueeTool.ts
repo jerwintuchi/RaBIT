@@ -7,6 +7,7 @@ import type {
   ToolEngineContext,
   ToolId,
 } from '../ToolEngine';
+import type { SelectionMask } from '../ToolEngine/types';
 import { DrawCommand, type PixelDelta } from '../commands/DrawCommand';
 
 /**
@@ -19,26 +20,30 @@ import { DrawCommand, type PixelDelta } from '../commands/DrawCommand';
  *   • Double-click on canvas → clear selection (also handled in CanvasViewport).
  *   • Ctrl+I → invert selection (handled in CanvasViewport keyboard handler).
  *
- * Move-preview technique:
- *   At drag start the original selection pixels are cleared in a GPU-only copy
- *   of the layer (via previewLayerOnGPU) so they visually "lift off" immediately.
- *   The scratch buffer then draws them at the new position each frame. On
- *   pointer-up a DrawCommand commits the final state and the real layer data is
- *   restored by notifyLayerChanged — the preview copy is discarded automatically.
- *
- * Fill / erase:
- *   Handled externally via CanvasViewport keyboard shortcuts (Delete → erase,
- *   Alt+Backspace → fill with primary colour). Those shortcuts call the
- *   fillSelection / eraseSelection helpers in action-composers/drawActions.ts.
+ * Non-destructive floating-selection model (move mode):
+ *   Moved pixels float above a background copy that preserves original ambient
+ *   pixels at every destination. Multiple repositionings are allowed before a
+ *   single DrawCommand commits the full delta from original → final positions.
+ *   Commit triggers on tool switch, deselect, delete/cut/selectAll, or Escape
+ *   with no active drag.
  */
+
+interface FloatingState {
+  pixels: Array<{ x: number; y: number; color: RGBA }>;
+  background: Uint8ClampedArray;
+  originalLayerBuf: Uint8ClampedArray;
+  originalSelection: SelectionMask | null;
+  layerId: LayerId;
+  currentDx: number;
+  currentDy: number;
+}
+
 export class MarqueeTool implements Tool {
   readonly id: ToolId = 'marquee';
   readonly cursor: CursorDef = { type: 'crosshair' };
 
   // ── selection-draw state ───────────────────────────────────────────────────
   private selecting = false;
-  // True after a single click outside a committed selection — waits to see if
-  // the user drags (becomes a new selection) or releases (no-op, keeps existing).
   private pendingNewSelection = false;
   private selStartX = 0;
   private selStartY = 0;
@@ -48,24 +53,20 @@ export class MarqueeTool implements Tool {
   private moveStartX = 0;
   private moveStartY = 0;
   private moveLayerId: LayerId | null = null;
-  private moveLayerBuf: Uint8ClampedArray | null = null;  // original layer data (unmodified)
-  // Mutable GPU-preview copy: source pixels zeroed + current destination area zeroed.
-  // Updated incrementally each pointer-move so only the floated pixels are visible
-  // inside the moving marching ants (ambient destination pixels stay invisible).
+  // Points to _floating.background during a drag segment.
   private _previewBuf: Uint8ClampedArray | null = null;
   private _prevMoveDx = 0;
   private _prevMoveDy = 0;
+  // Points to _floating.pixels during a drag segment.
   private movePixels: Array<{ x: number; y: number; color: RGBA }> = [];
-  // Tight bounding box of the non-transparent source pixels (not the full selection
-  // rectangle). Used so the live marching-ants bounds track only the moved pixels.
-  private _pixelBounds: { x: number; y: number; w: number; h: number } | null = null;
-  private selBoundsAtMoveStart: { x: number; y: number; w: number; h: number } | null = null;
   private moveScratch: Uint8ClampedArray | null = null;
   private moveScratchW = 0;
   private moveScratchH = 0;
-  // Tracks which scratch pixels were written last move event so only those are
-  // cleared next event, avoiding a full fill(0) over the whole canvas buffer.
   private _prevScratchPixels: Array<{ x: number; y: number }> = [];
+
+  // ── floating selection (persists between drag segments) ───────────────────
+  private _floating: FloatingState | null = null;
+  private _backgroundSnapshot: Uint8ClampedArray | null = null;
 
   // Minimal placeholder used during live selection drag to avoid per-frame allocs.
   private static readonly DRAFT_MASK = new Uint8ClampedArray(1);
@@ -74,10 +75,10 @@ export class MarqueeTool implements Tool {
 
   onPointerDown(e: CanvasPointerEvent): void {
     if (e.button !== 0) return;
+    if (this.moving) return;
 
     const sel = this.ctx.getSelection();
 
-    // Inside a committed selection → enter move mode
     const insideSel =
       sel &&
       sel.data.length > 1 &&
@@ -94,57 +95,93 @@ export class MarqueeTool implements Tool {
 
       const { width, height } = this.ctx.getCanvasSize();
       this.ensureMoveScratch(width, height);
-      this.moveScratch!.fill(0);
-      this._prevScratchPixels = [];
 
-      this.moving = true;
-      this.moveStartX = e.canvasX;
-      this.moveStartY = e.canvasY;
-      this.moveLayerId = layerId;
-      this.moveLayerBuf = layerBuf;  // reference to store data — NOT modified
-      this.selBoundsAtMoveStart = { ...sel.bounds };
+      // ── Re-drag of an existing float ───────────────────────────────────────
+      if (this._floating && this._floating.layerId === layerId) {
+        this._backgroundSnapshot = this._floating.background.slice();
+        this._prevMoveDx = 0;
+        this._prevMoveDy = 0;
+        this._previewBuf = this._floating.background;
 
-      // Snapshot only the non-transparent pixels inside the selection mask.
-      // Tracking the EXACT pixels (not the whole rectangle) means the selection
-      // after the move only covers those pixels — no ambient canvas pixels bleed in.
+        this.moving = true;
+        this.moveStartX = e.canvasX;
+        this.moveStartY = e.canvasY;
+        this.moveLayerId = layerId;
+        this.movePixels = this._floating.pixels;
+
+        this.ctx.previewLayerOnGPU(layerId, this._floating.background);
+
+        this.moveScratch!.fill(0);
+        this._prevScratchPixels = [];
+        for (const { x, y, color } of this._floating.pixels) {
+          const nx = x + this._floating.currentDx;
+          const ny = y + this._floating.currentDy;
+          if (nx >= 0 && ny >= 0 && nx < width && ny < height) {
+            writePixel(this.moveScratch!, nx, ny, width, color);
+            this._prevScratchPixels.push({ x: nx, y: ny });
+          }
+        }
+        this.ctx.updateScratch(this.moveScratch!);
+        return;
+      }
+
+      // ── First drag — start a new float ─────────────────────────────────────
+      const capturedPixels: Array<{ x: number; y: number; color: RGBA }> = [];
       const { bounds } = sel;
-      let pxMin = Infinity, pyMin = Infinity, pxMax = -Infinity, pyMax = -Infinity;
       for (let y = bounds.y; y < bounds.y + bounds.h; y++) {
         for (let x = bounds.x; x < bounds.x + bounds.w; x++) {
           if (x < 0 || y < 0 || x >= width || y >= height) continue;
           if (!sel.data[y * sel.width + x]) continue;
           const c = readPixel(layerBuf, x, y, width);
-          if ((c & 0xff) !== 0) {
-            this.movePixels.push({ x, y, color: c });
-            if (x < pxMin) pxMin = x;
-            if (x > pxMax) pxMax = x;
-            if (y < pyMin) pyMin = y;
-            if (y > pyMax) pyMax = y;
-          }
+          if ((c & 0xff) !== 0) capturedPixels.push({ x, y, color: c });
         }
       }
-      this._pixelBounds = this.movePixels.length > 0
-        ? { x: pxMin, y: pyMin, w: pxMax - pxMin + 1, h: pyMax - pyMin + 1 }
-        : null;
 
-      // Build a mutable GPU-preview copy with source pixels cleared so they
-      // visually "lift off".  _previewBuf is updated incrementally on every
-      // pointer-move to also zero the destination area, preventing ambient pixels
-      // at the destination from appearing inside the moving marching ants.
-      const previewBuf = new Uint8ClampedArray(layerBuf);
-      for (const { x, y } of this.movePixels) {
-        writePixel(previewBuf, x, y, width, 0);
+      if (capturedPixels.length === 0) return;
+
+      const originalLayerBuf = new Uint8ClampedArray(layerBuf);
+      const background = new Uint8ClampedArray(layerBuf);
+      for (const { x, y } of capturedPixels) {
+        writePixel(background, x, y, width, 0);
       }
-      this._previewBuf = previewBuf;
+
+      this._floating = {
+        pixels: capturedPixels,
+        background,
+        originalLayerBuf,
+        originalSelection: sel,
+        layerId,
+        currentDx: 0,
+        currentDy: 0,
+      };
+      this._backgroundSnapshot = background.slice();
       this._prevMoveDx = 0;
       this._prevMoveDy = 0;
-      this.ctx.previewLayerOnGPU(layerId, previewBuf);
+      this._previewBuf = background;
+
+      this.moving = true;
+      this.moveStartX = e.canvasX;
+      this.moveStartY = e.canvasY;
+      this.moveLayerId = layerId;
+      this.movePixels = capturedPixels;
+
+      this.ctx.previewLayerOnGPU(layerId, background);
+
+      this.moveScratch!.fill(0);
+      this._prevScratchPixels = [];
+      for (const { x, y, color } of capturedPixels) {
+        if (x >= 0 && y >= 0 && x < width && y < height) {
+          writePixel(this.moveScratch!, x, y, width, color);
+          this._prevScratchPixels.push({ x, y });
+        }
+      }
+      this.ctx.updateScratch(this.moveScratch!);
       return;
     }
 
-    // If a committed selection exists, wait until the user actually drags before
-    // starting a new selection.  A bare click (no drag) is a no-op so the user
-    // doesn't accidentally dismiss the selection — double-click clears it.
+    // Commit any active float before starting a new selection draw.
+    this.commitFloating();
+
     this.selStartX = e.canvasX;
     this.selStartY = e.canvasY;
     if (sel && sel.data.length > 1) {
@@ -158,19 +195,20 @@ export class MarqueeTool implements Tool {
     if (this.moving) {
       const dx = e.canvasX - this.moveStartX;
       const dy = e.canvasY - this.moveStartY;
+      const baseDx = this._floating?.currentDx ?? 0;
+      const baseDy = this._floating?.currentDy ?? 0;
       const w = this.moveScratchW;
       const h = this.moveScratchH;
 
-      // ── scratch buffer: paint moved pixels at new position ─────────────────
-      // Only clear pixels written in the previous move event, not the full buffer.
+      // Clear only pixels written in the previous move event.
       for (const { x, y } of this._prevScratchPixels) {
         const i = (y * w + x) * 4;
         this.moveScratch![i] = this.moveScratch![i + 1] = this.moveScratch![i + 2] = this.moveScratch![i + 3] = 0;
       }
       this._prevScratchPixels = [];
       for (const { x, y, color } of this.movePixels) {
-        const nx = x + dx;
-        const ny = y + dy;
+        const nx = x + baseDx + dx;
+        const ny = y + baseDy + dy;
         if (nx >= 0 && ny >= 0 && nx < w && ny < h) {
           writePixel(this.moveScratch!, nx, ny, w, color);
           this._prevScratchPixels.push({ x: nx, y: ny });
@@ -178,35 +216,15 @@ export class MarqueeTool implements Tool {
       }
       this.ctx.updateScratch(this.moveScratch!);
 
-      // ── GPU preview layer: keep destination area transparent ───────────────
-      // Incrementally update _previewBuf so only floated pixels are visible
-      // inside the moving marching ants — ambient pixels at the destination
-      // must not show through.
-      if (this._previewBuf && this.moveLayerBuf && this.moveLayerId && this.selBoundsAtMoveStart) {
+      if (this._previewBuf && this.moveLayerId && this._floating) {
         this._updateMovePreview(dx, dy);
       }
 
-      // ── selection overlay: follow only the moved pixels, not the full rect ──
-      if (this._pixelBounds) {
-        const sel = this.ctx.getSelection();
-        if (sel) {
-          this.ctx.setSelection({
-            ...sel,
-            bounds: {
-              x: this._pixelBounds.x + dx,
-              y: this._pixelBounds.y + dy,
-              w: this._pixelBounds.w,
-              h: this._pixelBounds.h,
-            },
-          });
-        }
-      }
+      this.ctx.setSelectionDragOffset({ dx, dy });
       return;
     }
 
     if (this.pendingNewSelection) {
-      // First actual movement after clicking outside a committed selection —
-      // promote to an active new-selection drag and clear the old selection.
       this.pendingNewSelection = false;
       this.selecting = true;
       this.ctx.clearSelection();
@@ -231,104 +249,92 @@ export class MarqueeTool implements Tool {
   }
 
   onPointerUp(e: CanvasPointerEvent): void {
-    // Single click outside a committed selection → keep existing selection.
     if (this.pendingNewSelection) {
       this.pendingNewSelection = false;
       return;
     }
 
     if (this.moving) {
-      this.moving = false;
-      const layerId = this.moveLayerId;
-      const layerBuf = this.moveLayerBuf;
-      this.moveLayerId = null;
-      this.moveLayerBuf = null;
-      this._previewBuf = null;
-      this.ctx.clearScratch();
-
-      const dx = e.canvasX - this.moveStartX;
-      const dy = e.canvasY - this.moveStartY;
-
-      if (!layerId || !layerBuf) {
-        this.movePixels = [];
-        this.selBoundsAtMoveStart = null;
-        this._pixelBounds = null;
-        return;
-      }
-
+      const segDx = e.canvasX - this.moveStartX;
+      const segDy = e.canvasY - this.moveStartY;
       const w = this.moveScratchW;
       const h = this.moveScratchH;
 
-      if (this.movePixels.length === 0) {
-        // Nothing to move — restore original GPU state
-        this.ctx.previewLayerOnGPU(layerId, layerBuf);
-        this.selBoundsAtMoveStart = null;
-        this._pixelBounds = null;
+      this.moving = false;
+      const layerId = this.moveLayerId;
+      this.ctx.clearScratch();
+      this.ctx.setSelectionDragOffset(null);
+      this._prevScratchPixels = [];
+
+      if (!layerId || !this._floating) {
+        this.moveLayerId = null;
+        this._previewBuf = null;
+        this.movePixels = [];
         return;
       }
 
-      // Build delta map: erase original positions, paint at new positions
-      const deltaMap = new Map<number, PixelDelta>();
+      // Check whether the drop position has at least one in-bounds pixel.
+      const newDx = this._floating.currentDx + segDx;
+      const newDy = this._floating.currentDy + segDy;
+      const anyInBounds = this._floating.pixels.some(
+        ({ x, y }) => x + newDx >= 0 && y + newDy >= 0 && x + newDx < w && y + newDy < h,
+      );
 
-      for (const { x, y } of this.movePixels) {
-        const key = y * w + x;
-        if (!deltaMap.has(key))
-          deltaMap.set(key, { x, y, before: readPixel(layerBuf, x, y, w), after: 0 });
+      if (!anyInBounds) {
+        // All pixels went off-canvas. Revert background to the pre-drag snapshot
+        // so the float stays alive at its last visible position.
+        if (this._backgroundSnapshot) {
+          this._floating.background.set(this._backgroundSnapshot);
+        }
+        this.ctx.previewLayerOnGPU(layerId, this._floating.background);
+        this.moveLayerId = null;
+        this._previewBuf = null;
+        this._backgroundSnapshot = null;
+        this.movePixels = [];
+        return;
       }
-      for (const { x, y, color } of this.movePixels) {
-        const nx = x + dx;
-        const ny = y + dy;
+
+      // Final preview update while moveLayerId is still set.
+      if (this._previewBuf) {
+        this._updateMovePreview(segDx, segDy);
+      }
+      this.moveLayerId = null;
+      this._previewBuf = null;
+
+      // Accumulate displacement.
+      this._floating.currentDx = newDx;
+      this._floating.currentDy = newDy;
+
+      // Write floating pixels into background at new position.
+      for (const { x, y, color } of this._floating.pixels) {
+        const nx = x + this._floating.currentDx;
+        const ny = y + this._floating.currentDy;
         if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        const key = ny * w + nx;
-        const existing = deltaMap.get(key);
-        if (existing) {
-          existing.after = color;
-        } else {
-          deltaMap.set(key, { x: nx, y: ny, before: readPixel(layerBuf, nx, ny, w), after: color });
-        }
+        writePixel(this._floating.background, nx, ny, w, color);
       }
 
-      // Rebuild selection from the exact moved-pixel positions (not the full rect).
-      // This ensures the next move only picks up the originally-selected pixels,
-      // not any ambient canvas pixels that happen to be inside the rectangle.
-      {
-        const newMask = new Uint8ClampedArray(w * h);
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (const { x, y } of this.movePixels) {
-          const fx = x + dx;
-          const fy = y + dy;
-          if (fx < 0 || fy < 0 || fx >= w || fy >= h) continue;
-          newMask[fy * w + fx] = 1;
-          if (fx < minX) minX = fx;
-          if (fx > maxX) maxX = fx;
-          if (fy < minY) minY = fy;
-          if (fy > maxY) maxY = fy;
-        }
-        if (maxX >= 0) {
-          this.ctx.setSelection({
-            data: newMask, width: w, height: h,
-            bounds: { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 },
-          });
-        }
+      this.ctx.previewLayerOnGPU(this._floating.layerId, this._floating.background);
+      this._backgroundSnapshot = null;
+
+      // Rebuild selection at exact new pixel positions.
+      const { currentDx, currentDy } = this._floating;
+      const newMask = new Uint8ClampedArray(w * h);
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const { x, y } of this._floating.pixels) {
+        const fx = x + currentDx; const fy = y + currentDy;
+        if (fx < 0 || fy < 0 || fx >= w || fy >= h) continue;
+        newMask[fy * w + fx] = 1;
+        if (fx < minX) minX = fx; if (fx > maxX) maxX = fx;
+        if (fy < minY) minY = fy; if (fy > maxY) maxY = fy;
+      }
+      if (maxX >= 0) {
+        this.ctx.setSelection({
+          data: newMask, width: w, height: h,
+          bounds: { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 },
+        });
       }
 
       this.movePixels = [];
-      this.selBoundsAtMoveStart = null;
-      this._pixelBounds = null;
-
-      if (deltaMap.size === 0) {
-        // No pixels changed (e.g. zero movement) — restore GPU state
-        this.ctx.previewLayerOnGPU(layerId, layerBuf);
-        return;
-      }
-
-      // notifyLayerChanged inside DrawCommand.execute restores the real layer GPU state
-      const cmd = new DrawCommand(
-        layerId, Array.from(deltaMap.values()), layerBuf, w,
-        (id, data) => this.ctx.notifyLayerChanged(id, data),
-        'Move selection',
-      );
-      this.ctx.executeCommand(cmd);
       return;
     }
 
@@ -348,7 +354,6 @@ export class MarqueeTool implements Tool {
       return;
     }
 
-    // Build real per-pixel mask on drag complete
     const mask = new Uint8ClampedArray(width * height);
     for (let y = minY; y <= maxY; y++)
       for (let x = minX; x <= maxX; x++)
@@ -363,22 +368,139 @@ export class MarqueeTool implements Tool {
   }
 
   onCancel(): void {
-    if (this.moving && this.moveLayerId && this.moveLayerBuf) {
-      // Restore GPU state to original layer data
-      this.ctx.previewLayerOnGPU(this.moveLayerId, this.moveLayerBuf);
+    if (this.moving && this._floating) {
+      // Cancel current drag segment; revert background to pre-drag snapshot.
+      this.moving = false;
+      if (this._backgroundSnapshot) {
+        this._floating.background.set(this._backgroundSnapshot);
+        this.ctx.previewLayerOnGPU(this._floating.layerId, this._floating.background);
+      }
+      this._backgroundSnapshot = null;
+      this.moveLayerId = null;
+      this._previewBuf = null;
+      this.movePixels = [];
+      this._prevScratchPixels = [];
+      this.ctx.setSelectionDragOffset(null);
+      this.ctx.clearScratch();
+      return;
     }
+
+    if (!this.moving && this._floating) {
+      // Cancel entire float; restore original layer state and selection.
+      const { layerId, originalLayerBuf, originalSelection } = this._floating;
+      this.ctx.previewLayerOnGPU(layerId, originalLayerBuf);
+      if (originalSelection) this.ctx.setSelection(originalSelection);
+      else this.ctx.clearSelection();
+      this._floating = null;
+      this._backgroundSnapshot = null;
+      this.selecting = false;
+      this.pendingNewSelection = false;
+      this.ctx.clearScratch();
+      return;
+    }
+
+    // No float — clean up any active state.
     this.selecting = false;
     this.pendingNewSelection = false;
     this.moving = false;
     this.moveLayerId = null;
-    this.moveLayerBuf = null;
     this._previewBuf = null;
     this.movePixels = [];
-    this.selBoundsAtMoveStart = null;
-    this._pixelBounds = null;
     this._prevScratchPixels = [];
+    this.ctx.setSelectionDragOffset(null);
     this.ctx.clearScratch();
     this.ctx.clearSelection();
+  }
+
+  onDeactivate(): void {
+    this.commitFloating();
+    if (this.moving) this.onCancel();
+  }
+
+  private commitFloating(): void {
+    if (!this._floating) return;
+    const { pixels, originalLayerBuf, layerId, currentDx, currentDy } = this._floating;
+    const w = this.moveScratchW;
+    const h = this.moveScratchH;
+    const liveBuf = this.ctx.getLayerData(layerId);
+
+    this._floating = null;
+    this._backgroundSnapshot = null;
+    this.moving = false;
+    this.moveLayerId = null;
+    this._previewBuf = null;
+    this.movePixels = [];
+    this._prevScratchPixels = [];
+    this.ctx.setSelectionDragOffset(null);
+    this.ctx.clearScratch();
+
+    if (!liveBuf) return;
+
+    const deltaMap = new Map<number, PixelDelta>();
+    for (const { x, y } of pixels) {
+      const key = y * w + x;
+      if (!deltaMap.has(key))
+        deltaMap.set(key, { x, y, before: readPixel(originalLayerBuf, x, y, w), after: 0 });
+    }
+    for (const { x, y, color } of pixels) {
+      const nx = x + currentDx; const ny = y + currentDy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      const key = ny * w + nx;
+      const existing = deltaMap.get(key);
+      if (existing) existing.after = color;
+      else deltaMap.set(key, { x: nx, y: ny, before: readPixel(originalLayerBuf, nx, ny, w), after: color });
+    }
+
+    if (deltaMap.size === 0) {
+      this.ctx.previewLayerOnGPU(layerId, liveBuf);
+      return;
+    }
+    const cmd = new DrawCommand(
+      layerId, Array.from(deltaMap.values()), liveBuf, w,
+      (id, data) => this.ctx.notifyLayerChanged(id, data),
+      'Move selection',
+    );
+    this.ctx.executeCommand(cmd);
+  }
+
+  /**
+   * Incrementally keeps _previewBuf (_floating.background) correct during a
+   * live drag. `orig` is always _floating.originalLayerBuf so that restoring
+   * previous destinations always yields the ORIGINAL ambient pixel values
+   * regardless of how many drag segments have occurred.
+   */
+  private _updateMovePreview(dx: number, dy: number): void {
+    const buf = this._previewBuf!;
+    const orig = this._floating?.originalLayerBuf ?? buf;
+    const baseDx = this._floating?.currentDx ?? 0;
+    const baseDy = this._floating?.currentDy ?? 0;
+    const w = this.moveScratchW;
+    const h = this.moveScratchH;
+    const pdx = this._prevMoveDx;
+    const pdy = this._prevMoveDy;
+
+    // 1. Restore previous destination footprint from original data.
+    for (const { x, y } of this.movePixels) {
+      const px = x + baseDx + pdx;
+      const py = y + baseDy + pdy;
+      if (px < 0 || py < 0 || px >= w || py >= h) continue;
+      writePixel(buf, px, py, w, readPixel(orig, px, py, w));
+    }
+    // 2. Re-zero source positions (step 1 may have restored them if prev dest overlapped source).
+    for (const { x, y } of this.movePixels) {
+      writePixel(buf, x, y, w, 0);
+    }
+    // 3. Zero new destination footprint so scratch pixels are the only content there.
+    for (const { x, y } of this.movePixels) {
+      const nx = x + baseDx + dx;
+      const ny = y + baseDy + dy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      writePixel(buf, nx, ny, w, 0);
+    }
+
+    this._prevMoveDx = dx;
+    this._prevMoveDy = dy;
+    this.ctx.previewLayerOnGPU(this.moveLayerId!, buf);
   }
 
   private constrain(x: number, y: number, shift: boolean): [number, number] {
@@ -387,55 +509,6 @@ export class MarqueeTool implements Tool {
     const dy = y - this.selStartY;
     const s = Math.min(Math.abs(dx), Math.abs(dy));
     return [this.selStartX + Math.sign(dx) * s, this.selStartY + Math.sign(dy) * s];
-  }
-
-  /**
-   * Incrementally keep _previewBuf correct during a live move drag so that:
-   *   - Source pixel positions are always transparent ("lifted off").
-   *   - Exactly the positions where moved pixels will land are transparent
-   *     (the scratch will paint the moved colours there instead).
-   *   - Every other canvas pixel remains at its original value — it is never
-   *     hidden just because the selection rectangle happens to pass over it.
-   *
-   * Previous implementations zeroed the whole bounding-box rectangle, which
-   * caused ambient pixels to disappear and reappear as the selection moved,
-   * giving the false impression that those pixels were being "captured."
-   * Operating only on the exact pixel footprint (movePixels) prevents that.
-   */
-  private _updateMovePreview(dx: number, dy: number): void {
-    const buf = this._previewBuf!;
-    const orig = this.moveLayerBuf!;
-    const w = this.moveScratchW;
-    const h = this.moveScratchH;
-    const pdx = this._prevMoveDx;
-    const pdy = this._prevMoveDy;
-
-    // 1. Restore the PREVIOUS destination footprint from the frozen original data.
-    //    These positions are no longer covered by moved pixels so ambient content
-    //    should be visible again.
-    for (const { x, y } of this.movePixels) {
-      const px = x + pdx;
-      const py = y + pdy;
-      if (px < 0 || py < 0 || px >= w || py >= h) continue;
-      writePixel(buf, px, py, w, readPixel(orig, px, py, w));
-    }
-    // 2. Re-zero source pixel positions — step 1 may have restored them if the
-    //    previous destination happened to overlap the source.
-    for (const { x, y } of this.movePixels) {
-      writePixel(buf, x, y, w, 0);
-    }
-    // 3. Zero the NEW destination footprint so the scratch pixels are the only
-    //    thing visible at those positions (no ambient colour bleeding through).
-    for (const { x, y } of this.movePixels) {
-      const nx = x + dx;
-      const ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-      writePixel(buf, nx, ny, w, 0);
-    }
-
-    this._prevMoveDx = dx;
-    this._prevMoveDy = dy;
-    this.ctx.previewLayerOnGPU(this.moveLayerId!, buf);
   }
 
   private ensureMoveScratch(w: number, h: number): void {

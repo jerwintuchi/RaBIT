@@ -1,8 +1,10 @@
 // Bridges the ToolEngine into the state layer. Owns the engine singleton and
 // builds a ToolEngineContext that reads from / writes to Zustand stores.
+import { invoke } from '@tauri-apps/api/core';
 import { perfMark, perfMeasure } from '../core/perfProbe';
 import { ToolEngine } from '../core/ToolEngine';
 import type { ToolEngineContext, ToolId, RawPointerInput } from '../core/ToolEngine';
+import type { SelectionMask } from '../core/ToolEngine/types';
 import {
   PencilTool,
   EraserTool,
@@ -15,6 +17,8 @@ import {
   EyedropperTool,
   HandTool,
   ZoomTool,
+  MagicWandTool,
+  LassoTool,
 } from '../core/tools';
 import type { Command } from '../core/CommandSystem';
 import { packRGBA } from '../core/DataModel';
@@ -33,6 +37,7 @@ import {
   setActiveLayerOnEngine,
   uploadLayerData,
   readCompositePixel,
+  readAllCompositedPixels,
   DirtyFlag,
   getEngine,
 } from './renderBridge';
@@ -79,22 +84,56 @@ function buildContext(): ToolEngineContext {
       useLayerStore.getState().bumpDataVersion(layerId);
     },
     previewLayerOnGPU: (layerId, data) => {
-      // Upload directly to GPU — does NOT touch the store or data versions.
-      // Used for live move-preview so original selection pixels vanish while dragging.
       uploadLayerData(layerId, data);
       getEngine()?.markDirty(DirtyFlag.LAYER_DATA | DirtyFlag.FULL);
     },
     getSelection: () => useToolStore.getState().selection,
     setSelection: (mask) => useToolStore.getState().setSelection(mask),
     clearSelection: () => useToolStore.getState().clearSelection(),
+    setSelectionDragOffset: (offset) => useToolStore.getState().setSelectionDragOffset(offset),
+    getPixelPerfect: () => useToolStore.getState().options.pencil.pixelPerfect,
     getFillTolerance: () => useToolStore.getState().options.fill.tolerance,
+    getMagicWandTolerance: () => useToolStore.getState().options['magic-wand'].tolerance,
+    getMirrorMode: () => useToolStore.getState().mirrorMode,
+    setLassoPreviewPath: (path) => useToolStore.getState().setLassoPreviewPath(path),
+    getCompositedPixels: () => readAllCompositedPixels(),
+    computeSelectionRust: async (x: number, y: number, tolerance: number): Promise<SelectionMask | null> => {
+      const pixels = readAllCompositedPixels();
+      if (!pixels) return null;
+      const { width, height } = useProjectStore.getState().canvas;
+      type RustResult = {
+        mask: number[];
+        width: number;
+        height: number;
+        boundsX: number;
+        boundsY: number;
+        boundsW: number;
+        boundsH: number;
+      };
+      try {
+        const result = await invoke<RustResult>('compute_selection', {
+          pixels: Array.from(pixels),
+          width,
+          height,
+          startX: x,
+          startY: y,
+          tolerance,
+        });
+        return {
+          data: new Uint8ClampedArray(result.mask),
+          width: result.width,
+          height: result.height,
+          bounds: { x: result.boundsX, y: result.boundsY, w: result.boundsW, h: result.boundsH },
+        };
+      } catch {
+        return null;
+      }
+    },
     zoomToward: (cx, cy, direction) => {
       const ui = useUIStore.getState();
       const oldZoom = ui.zoomLevel;
       const newZoom = snapZoom(oldZoom, direction);
       if (newZoom === oldZoom) return;
-      // Keep canvas point (cx, cy) at the same screen position:
-      // newPan = oldPan + canvasPoint * (oldZoom - newZoom)
       const newPanX = ui.panOffset.x + cx * (oldZoom - newZoom);
       const newPanY = ui.panOffset.y + cy * (oldZoom - newZoom);
       ui.setZoomLevel(newZoom);
@@ -117,6 +156,8 @@ export function initToolEngine(): ToolEngine {
   engine.registerTool(new EyedropperTool(ctx));
   engine.registerTool(new HandTool(ctx));
   engine.registerTool(new ZoomTool(ctx));
+  engine.registerTool(new MagicWandTool(ctx));
+  engine.registerTool(new LassoTool(ctx));
   _toolEngine = engine;
   return engine;
 }
@@ -129,8 +170,6 @@ export function disposeToolEngine(): void {
   _toolEngine = null;
 }
 
-// ── Imperative passthrough helpers — let the UI call without holding the engine ──
-
 export function setToolTransform(panX: number, panY: number, zoom: number): void {
   _toolEngine?.setTransform(panX, panY, zoom);
 }
@@ -139,10 +178,14 @@ export function setActiveTool(id: ToolId): void {
   _toolEngine?.setActiveTool(id);
 }
 
+export function commitFloatingSelection(): void {
+  _toolEngine?.commitPendingOps();
+}
+
 export function toolPointerDown(input: RawPointerInput): void {
   perfMark();
   _toolEngine?.pointerDown(input);
-  requestAnimationFrame(() => perfMeasure('pointerDown→RAF'));
+  requestAnimationFrame(() => perfMeasure('pointerDown->RAF'));
 }
 
 export function toolPointerMove(input: RawPointerInput): void {

@@ -56,12 +56,21 @@ export class EllipseTool implements Tool {
   onPointerMove(e: CanvasPointerEvent): void {
     if (!this.active) return;
     this.scratch!.fill(0);
-    const [x1, y1] = this.constrainCircle(e.canvasX, e.canvasY, e.shiftKey);
+    const [ex, ey] = this.constrainCircle(e.canvasX, e.canvasY, e.shiftKey);
     const sel = this.ctx.getSelection();
-    this.plotEllipse(this.startX, this.startY, x1, y1, (x, y) => {
-      if (x >= 0 && y >= 0 && x < this.scratchW && y < this.scratchH && isInSelection(sel, x, y))
-        writePixel(this.scratch!, x, y, this.scratchW, this.color);
-    });
+    const W = this.scratchW;
+    const H = this.scratchH;
+    const paint = (x: number, y: number) => {
+      if (x >= 0 && y >= 0 && x < W && y < H && isInSelection(sel, x, y))
+        writePixel(this.scratch!, x, y, W, this.color);
+    };
+    const draw = (sx: number, sy: number, ex2: number, ey2: number) =>
+      this.plotEllipse(sx, sy, ex2, ey2, paint);
+    const { h: mH, v: mV } = this.ctx.getMirrorMode();
+    draw(this.startX, this.startY, ex, ey);
+    if (mH) draw(W - 1 - this.startX, this.startY, W - 1 - ex, ey);
+    if (mV) draw(this.startX, H - 1 - this.startY, ex, H - 1 - ey);
+    if (mH && mV) draw(W - 1 - this.startX, H - 1 - this.startY, W - 1 - ex, H - 1 - ey);
     this.ctx.updateScratch(this.scratch!);
   }
 
@@ -74,17 +83,25 @@ export class EllipseTool implements Tool {
     this.layerBuf = null;
     if (!layerId || !layerBuf) { this.ctx.clearScratch(); return; }
 
-    const [x1, y1] = this.constrainCircle(e.canvasX, e.canvasY, e.shiftKey);
+    const [ex, ey] = this.constrainCircle(e.canvasX, e.canvasY, e.shiftKey);
     const w = this.scratchW;
+    const H = this.scratchH;
     const sel = this.ctx.getSelection();
     const deltas = new Map<number, PixelDelta>();
-    this.plotEllipse(this.startX, this.startY, x1, y1, (x, y) => {
-      if (x < 0 || y < 0 || x >= w || y >= this.scratchH) return;
+    const collectPixel = (x: number, y: number) => {
+      if (x < 0 || y < 0 || x >= w || y >= H) return;
       if (!isInSelection(sel, x, y)) return;
       const key = y * w + x;
       if (!deltas.has(key))
         deltas.set(key, { x, y, before: readPixel(layerBuf, x, y, w), after: this.color });
-    });
+    };
+    const collect = (sx: number, sy: number, ex2: number, ey2: number) =>
+      this.plotEllipse(sx, sy, ex2, ey2, collectPixel);
+    const { h: mH, v: mV } = this.ctx.getMirrorMode();
+    collect(this.startX, this.startY, ex, ey);
+    if (mH) collect(w - 1 - this.startX, this.startY, w - 1 - ex, ey);
+    if (mV) collect(this.startX, H - 1 - this.startY, ex, H - 1 - ey);
+    if (mH && mV) collect(w - 1 - this.startX, H - 1 - this.startY, w - 1 - ex, H - 1 - ey);
 
     this.ctx.clearScratch();
     if (deltas.size === 0) return;

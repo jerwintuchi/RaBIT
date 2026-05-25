@@ -22,6 +22,7 @@ interface Project {
   activeFrameIndex: number;
   zoomLevel: number;
   panOffset: { x: number; y: number };
+  referencePath?: string | null;
 }
 
 /**
@@ -83,6 +84,7 @@ export function projectToDto(project: Project): ProjectDto {
     activeFrameIndex: project.activeFrameIndex,
     zoomLevel: project.zoomLevel,
     panOffset: { x: project.panOffset.x, y: project.panOffset.y },
+    reference_path: project.referencePath ?? null,
   };
 }
 
@@ -144,6 +146,7 @@ export function dtoToProject(dto: ProjectDto): Project {
     activeFrameIndex: dto.activeFrameIndex,
     zoomLevel: dto.zoomLevel,
     panOffset: { x: dto.panOffset.x, y: dto.panOffset.y },
+    referencePath: dto.reference_path ?? null,
   };
 }
 

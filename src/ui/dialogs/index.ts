@@ -5,3 +5,4 @@ export { ResizeCanvasDialog } from './ResizeCanvasDialog';
 export { CrashRecoveryDialog } from './CrashRecoveryDialog';
 export { ExportDialog } from './ExportDialog';
 export { PrefsDialog } from './PrefsDialog';
+export { RotateConfirmDialog } from './RotateConfirmDialog';

@@ -1,9 +1,11 @@
 import {
   ipcExportPng,
   ipcExportSpritesheet,
+  ipcExportGif,
   listenExportProgress,
   type PngExportOptions,
   type SpritesheetExportOptions,
+  type GifExportOptions,
   type ExportProgress,
 } from '../../bridge/exportIpc';
 import { projectToDto } from '../../bridge/projectSerializer';
@@ -83,6 +85,29 @@ export async function exportSpritesheet(
     toast.info(`Spritesheet exported to ${pngPath}`);
   } catch (e) {
     toast.error(`Export failed: ${String(e)}`);
+  } finally {
+    unlisten?.();
+  }
+}
+
+
+export async function exportGif(
+  opts: Omit<GifExportOptions, 'project'>,
+  onProgress?: (p: ExportProgress) => void,
+): Promise<void> {
+  const project = snapshotForExport();
+  let unlisten: (() => void) | null = null;
+
+  if (onProgress) {
+    unlisten = await listenExportProgress(onProgress).catch(() => null);
+  }
+
+  try {
+    const result = await ipcExportGif({ ...opts, project });
+    useUIStore.getState().hideExportDialog();
+    toast.info(`GIF exported to ${result.paths[0] ?? ''}`);
+  } catch (e) {
+    toast.error(`GIF export failed: ${String(e)}`);
   } finally {
     unlisten?.();
   }

@@ -12,7 +12,7 @@ type: project
 | 4 | Technical Stack Decision | ✅ Complete | docs/stack.md |
 | 5 | Data Model + File Format | ✅ Complete | docs/data-model.md |
 | 6 | Core Implementation Plan | ✅ Complete | docs/milestones.md |
-| 7 | Implementation (M0–M13 complete; release build + v1.0.0 tag pending) | 🔨 Active | src/ |
+| 7 | Implementation (M0–M14 complete; V1 pass + release tag pending) | 🔨 Active | src/ |
 | 8 | Optimization + Refactoring | ⏳ Pending | — |
 
 **Why:** Full product lifecycle approach — no phase skipped.
