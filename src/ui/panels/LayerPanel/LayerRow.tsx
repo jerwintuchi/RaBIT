@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { Layer } from '../../../state/dataModelTypes';
 import { layerActions } from '../../../state/action-composers';
 import { IconEye, IconEyeOff, IconLock } from '../../../assets/icons';
 import { LayerThumbnail } from './LayerThumbnail';
+import { ContextMenu } from '../../primitives';
+import type { ContextMenuItem } from '../../primitives';
 import styles from './LayerRow.module.css';
 
 interface LayerRowProps {
@@ -36,6 +38,7 @@ export function LayerRow({
 }: LayerRowProps): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(layer.name);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -70,6 +73,33 @@ export function LayerRow({
     }
   };
 
+  const closeCtxMenu = useCallback(() => setCtxMenu(null), []);
+
+  const ctxItems: ContextMenuItem[] = useMemo(() => [
+    {
+      type: 'item',
+      label: 'Rename',
+      onClick: () => { setCtxMenu(null); startRename(); },
+    },
+    {
+      type: 'item',
+      label: 'Duplicate layer',
+      onClick: () => { setCtxMenu(null); layerActions.duplicateLayer(layer.id); },
+    },
+    {
+      type: 'item',
+      label: 'Merge down',
+      onClick: () => { setCtxMenu(null); layerActions.mergeDown(layer.id); },
+    },
+    { type: 'separator' },
+    {
+      type: 'item',
+      label: 'Delete layer',
+      danger: true,
+      onClick: () => { setCtxMenu(null); layerActions.removeLayer(layer.id); },
+    },
+  ], [startRename, layer.id]);
+
   const isDraggingThis = draggingDisplayIdx === displayIdx;
   const showTopIndicator = dropDisplayIdx === displayIdx && dropOnTopHalf;
   const showBottomIndicator = dropDisplayIdx === displayIdx && !dropOnTopHalf;
@@ -90,6 +120,10 @@ export function LayerRow({
       aria-selected={active}
       draggable={!editing}
       onClick={onSelect}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setCtxMenu({ x: e.clientX, y: e.clientY });
+      }}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = 'move';
         // Required by Firefox so the drag actually starts
@@ -150,6 +184,13 @@ export function LayerRow({
         >
           {layer.name}
         </span>
+      )}
+      {ctxMenu && (
+        <ContextMenu
+          items={ctxItems}
+          anchor={ctxMenu}
+          onClose={closeCtxMenu}
+        />
       )}
     </div>
   );

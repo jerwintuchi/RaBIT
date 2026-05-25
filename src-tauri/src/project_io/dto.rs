@@ -88,6 +88,7 @@ pub struct ProjectDto {
     pub layers: Vec<LayerDto>,
     pub frames: Vec<FrameDto>,
     pub palette: PaletteDto,
+    #[serde(default)]
     pub tags: Vec<TagDto>,
     pub active_layer_id: Option<String>,
     pub active_frame_index: u32,

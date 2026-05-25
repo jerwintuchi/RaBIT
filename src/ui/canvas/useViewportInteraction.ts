@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useUIStore } from '../../state/useUIStore';
 import { useToolStore } from '../../state/useToolStore';
+import { useReferenceStore } from '../../state/useReferenceStore';
 import { ZOOM_LEVELS, snapZoom } from '../../state/zoomLevels';
 
 export interface ViewportInteractionState {
@@ -47,11 +48,21 @@ export function useViewportInteraction(
     if (!el) return;
 
     let isPanning = false;
+    let isDraggingReference = false;
     let isSpaceDown = false;
     let lastPointer = { x: 0, y: 0 };
     let savedCursor = '';
 
     const onPointerDown = (e: PointerEvent) => {
+      // Alt+drag → move reference image position in canvas space
+      if (e.button === 0 && e.altKey && useReferenceStore.getState().imageData) {
+        isDraggingReference = true;
+        inputClaimedRef.current = true;
+        lastPointer = { x: e.clientX, y: e.clientY };
+        el.setPointerCapture(e.pointerId);
+        e.preventDefault();
+        return;
+      }
       const isHandActive = useToolStore.getState().activeTool === 'hand';
       if (e.button === 1 || (e.button === 0 && (isSpaceDown || isHandActive))) {
         isPanning = true;
@@ -72,6 +83,18 @@ export function useViewportInteraction(
         y: Math.floor((screenY - panOffset.y) / zoomLevel),
       });
 
+      if (isDraggingReference) {
+        const dx = e.clientX - lastPointer.x;
+        const dy = e.clientY - lastPointer.y;
+        lastPointer = { x: e.clientX, y: e.clientY };
+        const { zoomLevel: zoom } = stateRef.current;
+        const refState = useReferenceStore.getState();
+        const newX = refState.position.x + dx / zoom;
+        const newY = refState.position.y + dy / zoom;
+        useReferenceStore.getState().setPosition({ x: newX, y: newY });
+        return;
+      }
+
       if (!isPanning) return;
       const dx = e.clientX - lastPointer.x;
       const dy = e.clientY - lastPointer.y;
@@ -81,6 +104,12 @@ export function useViewportInteraction(
     };
 
     const onPointerUp = (e: PointerEvent) => {
+      if (isDraggingReference) {
+        isDraggingReference = false;
+        inputClaimedRef.current = false;
+        el.releasePointerCapture(e.pointerId);
+        return;
+      }
       if (isPanning) {
         isPanning = false;
         inputClaimedRef.current = false;
@@ -113,8 +142,15 @@ export function useViewportInteraction(
       });
     };
 
+    const isTypingTarget = () => {
+      const t = document.activeElement;
+      if (!t) return false;
+      const tag = (t as HTMLElement).tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || (t as HTMLElement).isContentEditable;
+    };
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !isSpaceDown) {
+      if (e.code === 'Space' && !isSpaceDown && !isTypingTarget()) {
         isSpaceDown = true;
         savedCursor = el.style.cursor;
         el.style.cursor = 'grab';
@@ -157,7 +193,7 @@ export function useViewportInteraction(
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
+      if (e.code === 'Space' && isSpaceDown) {
         isSpaceDown = false;
         el.style.cursor = savedCursor;
         // If pan ends by releasing space (not pointer), release the input claim too

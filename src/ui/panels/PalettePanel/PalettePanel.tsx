@@ -19,8 +19,10 @@ interface MenuState {
 
 export function PalettePanel(): JSX.Element {
   const swatches = usePaletteStore((s) => s.palette.swatches);
+
   const [size, setSize] = useState<SwatchSize>('M');
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [gridMenu, setGridMenu] = useState<{ x: number; y: number } | null>(null);
   const [renamingIndex, setRenamingIndex] = useState<number | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [dragSrc, setDragSrc] = useState<number | null>(null);
@@ -84,13 +86,12 @@ export function PalettePanel(): JSX.Element {
       }
     };
     reader.readAsText(file);
-    // Reset so the same file can be re-imported
     e.target.value = '';
   };
 
   // ── Context menu items ───────────────────────────────────────────────────
 
-  const menuItems: ContextMenuItem[] = menu
+  const swatchMenuItems: ContextMenuItem[] = menu
     ? [
         {
           type: 'item',
@@ -128,6 +129,23 @@ export function PalettePanel(): JSX.Element {
         },
       ]
     : [];
+
+  const gridMenuItems: ContextMenuItem[] = [
+    {
+      type: 'item',
+      label: 'Replace palette from canvas',
+      onClick: () => {
+        if (window.confirm('Replace the palette with canvas colors?')) {
+          paletteActions.buildFromCanvas('replace');
+        }
+      },
+    },
+    {
+      type: 'item',
+      label: 'Append canvas colors to palette',
+      onClick: () => paletteActions.buildFromCanvas('append'),
+    },
+  ];
 
   return (
     <div className={styles.panel}>
@@ -171,7 +189,6 @@ export function PalettePanel(): JSX.Element {
         </div>
       </div>
 
-      {/* Hidden file input for palette import */}
       <input
         ref={fileInputRef}
         type="file"
@@ -183,6 +200,11 @@ export function PalettePanel(): JSX.Element {
       <div
         className={styles.grid}
         style={{ '--swatch-size': `${SIZE_PX[size]}px` } as React.CSSProperties}
+        onContextMenu={(e) => {
+          if ((e.target as HTMLElement).closest('button')) return;
+          e.preventDefault();
+          setGridMenu({ x: e.clientX, y: e.clientY });
+        }}
       >
         {swatches.map((sw, idx) => {
           const isDragSrc = dragSrc === idx;
@@ -228,15 +250,27 @@ export function PalettePanel(): JSX.Element {
           );
         })}
         {swatches.length === 0 && (
-          <span className={styles.empty}>Click + to save the primary color</span>
+          <Tooltip
+            content="Right-click here to replace or append canvas colors to the palette"
+            placement="top"
+          >
+            <span className={styles.empty}>Click + to add the primary color</span>
+          </Tooltip>
         )}
       </div>
 
       {menu && (
         <ContextMenu
-          items={menuItems}
+          items={swatchMenuItems}
           anchor={menu.anchor}
           onClose={() => setMenu(null)}
+        />
+      )}
+      {gridMenu && (
+        <ContextMenu
+          items={gridMenuItems}
+          anchor={gridMenu}
+          onClose={() => setGridMenu(null)}
         />
       )}
     </div>

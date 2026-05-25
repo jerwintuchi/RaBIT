@@ -14,8 +14,11 @@ import {
   goToPrevFrame,
   frameActions,
   layerActions,
+  tagActions,
 } from '../../../state/action-composers';
 import { IconLock } from '../../../assets/icons';
+import { ContextMenu } from '../../primitives';
+import type { ContextMenuItem } from '../../primitives';
 import { resolveCell } from '../../../state/action-composers/frame-utils';
 import styles from './Timeline.module.css';
 
@@ -369,7 +372,7 @@ export function Timeline(): JSX.Element {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleFpsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = parseInt(e.target.value, 10);
@@ -387,6 +390,77 @@ export function Timeline(): JSX.Element {
   };
 
   const displayLayers = useMemo(() => [...layers].reverse(), [layers]);
+
+  // ── Layer rename in timeline ────────────────────────────────────────────────
+  const [renamingLayerId, setRenamingLayerId] = useState<string | null>(null);
+  const [renamingLayerName, setRenamingLayerName] = useState('');
+  const [layerCtxMenu, setLayerCtxMenu] = useState<{ layerId: string; anchor: { x: number; y: number } } | null>(null);
+  const layerRenameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (renamingLayerId && layerRenameInputRef.current) {
+      layerRenameInputRef.current.focus();
+      layerRenameInputRef.current.select();
+    }
+  }, [renamingLayerId]);
+
+  const commitLayerRename = useCallback(() => {
+    if (!renamingLayerId) return;
+    layerActions.renameLayer(renamingLayerId, renamingLayerName);
+    setRenamingLayerId(null);
+  }, [renamingLayerId, renamingLayerName]);
+
+  // Cancel any in-progress rename when the layer list changes (e.g. project reload)
+  useEffect(() => {
+    setRenamingLayerId(null);
+  }, [layers]);
+
+  // ── Tag row state ───────────────────────────────────────────────────────────
+  const tags = useFrameStore((s) => s.tags);
+  const tagRowRef = useRef<HTMLDivElement>(null);
+  const [tagDragStart, setTagDragStart] = useState<number | null>(null);
+  const [tagDraftEnd, setTagDraftEnd] = useState<number | null>(null);
+  const [editingTagId, setEditingTagId] = useState<string | null>(null);
+  const [editingTagName, setEditingTagName] = useState('');
+  const [tagContextMenu, setTagContextMenu] = useState<{
+    id: string;
+    anchor: { x: number; y: number };
+  } | null>(null);
+
+  const fiFromTagRowX = useCallback((clientX: number): number => {
+    const row = tagRowRef.current;
+    if (!row) return 0;
+    const rect = row.getBoundingClientRect();
+    const scrollLeft = frameGridRef.current?.scrollLeft ?? 0;
+    const x = clientX - rect.left + scrollLeft;
+    return Math.max(0, Math.min(frames.length - 1, Math.floor(x / FRAME_COL_W)));
+  }, [frames.length]);
+
+  const onTagRowMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const fi = fiFromTagRowX(e.clientX);
+    setTagDragStart(fi);
+    setTagDraftEnd(fi);
+  }, [fiFromTagRowX]);
+
+  const onTagRowMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (tagDragStart === null) return;
+    setTagDraftEnd(fiFromTagRowX(e.clientX));
+  }, [tagDragStart, fiFromTagRowX]);
+
+  const onTagRowMouseUp = useCallback(() => {
+    if (tagDragStart !== null && tagDraftEnd !== null) {
+      tagActions.createTag(tagDragStart, tagDraftEnd);
+    }
+    setTagDragStart(null);
+    setTagDraftEnd(null);
+  }, [tagDragStart, tagDraftEnd]);
+
+  const commitTagRename = useCallback(() => {
+    if (!editingTagId) return;
+    tagActions.renameTag(editingTagId, editingTagName.trim() || 'Tag');
+    setEditingTagId(null);
+  }, [editingTagId, editingTagName]);
 
   return (
     <div className={styles.timeline}>
@@ -476,6 +550,7 @@ export function Timeline(): JSX.Element {
       <div className={styles.body}>
         {/* Layer label column */}
         <div className={styles.layerLabels}>
+          <div className={styles.tagRowSpacer} />
           <div className={styles.layerLabelsHeader}><span>Layer</span></div>
           <div className={styles.layerLabelsList}>
             {displayLayers.map((layer) => (
@@ -486,7 +561,12 @@ export function Timeline(): JSX.Element {
                   layer.id === activeLayerId ? styles.activeLayer : '',
                 ].filter(Boolean).join(' ')}
                 onClick={() => useLayerStore.getState().setActiveLayer(layer.id)}
-                title={`${layer.name} — click to select`}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  useLayerStore.getState().setActiveLayer(layer.id);
+                  setLayerCtxMenu({ layerId: layer.id, anchor: { x: e.clientX, y: e.clientY } });
+                }}
+                title={`${layer.name} — click to select, right-click for options`}
               >
                 <button
                   type="button"
@@ -497,7 +577,23 @@ export function Timeline(): JSX.Element {
                 >
                   <IconLock />
                 </button>
-                <span>{layer.name}</span>
+                {renamingLayerId === layer.id ? (
+                  <input
+                    ref={layerRenameInputRef}
+                    className={styles.layerRenameInput}
+                    value={renamingLayerName}
+                    onChange={(e) => setRenamingLayerName(e.target.value)}
+                    onBlur={commitLayerRename}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.preventDefault(); commitLayerRename(); }
+                      if (e.key === 'Escape') setRenamingLayerId(null);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    maxLength={64}
+                  />
+                ) : (
+                  <span>{layer.name}</span>
+                )}
               </div>
             ))}
           </div>
@@ -512,6 +608,73 @@ export function Timeline(): JSX.Element {
           onPointerUp={onGridPointerUp}
           onPointerCancel={onGridPointerCancel}
         >
+          {/* Tag row */}
+          <div
+            ref={tagRowRef}
+            className={styles.tagRow}
+            onMouseDown={onTagRowMouseDown}
+            onMouseMove={onTagRowMouseMove}
+            onMouseUp={onTagRowMouseUp}
+            onMouseLeave={onTagRowMouseUp}
+          >
+            {tags.map((tag) => {
+              const left = tag.from * FRAME_COL_W;
+              const width = (tag.to - tag.from + 1) * FRAME_COL_W;
+              const r = (tag.color >>> 24) & 0xff;
+              const g = (tag.color >>> 16) & 0xff;
+              const b = (tag.color >>> 8) & 0xff;
+              const bg = `rgba(${r},${g},${b},0.25)`;
+              const border = `rgb(${r},${g},${b})`;
+              return (
+                <div
+                  key={tag.id}
+                  className={styles.tagBand}
+                  style={{ left, width, background: bg, borderColor: border }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => goToFrame(tag.from)}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setEditingTagId(tag.id);
+                    setEditingTagName(tag.name);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setTagContextMenu({ id: tag.id, anchor: { x: e.clientX, y: e.clientY } });
+                  }}
+                >
+                  {editingTagId === tag.id ? (
+                    <input
+                      className={styles.tagRenameInput}
+                      autoFocus
+                      value={editingTagName}
+                      onChange={(e) => setEditingTagName(e.target.value)}
+                      onBlur={commitTagRename}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') commitTagRename();
+                        if (e.key === 'Escape') setEditingTagId(null);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span className={styles.tagName}>{tag.name}</span>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Draft band preview while dragging to create a tag */}
+            {tagDragStart !== null && tagDraftEnd !== null && (
+              <div
+                className={styles.tagBandDraft}
+                style={{
+                  left: Math.min(tagDragStart, tagDraftEnd) * FRAME_COL_W,
+                  width: (Math.abs(tagDraftEnd - tagDragStart) + 1) * FRAME_COL_W,
+                }}
+              />
+            )}
+          </div>
+
           {/* Frame headers strip */}
           <div className={styles.frameHeaders}>
             {frames.map((frame, fi) => {
@@ -609,6 +772,66 @@ export function Timeline(): JSX.Element {
           </div>
         </div>
       </div>
+
+      {/* Layer context menu (from timeline label column) */}
+      {layerCtxMenu && (() => {
+        const lid = layerCtxMenu.layerId;
+        const items: ContextMenuItem[] = [
+          {
+            type: 'item',
+            label: 'Rename',
+            onClick: () => {
+              const layer = useLayerStore.getState().layers.find((l) => l.id === lid);
+              if (layer) { setRenamingLayerName(layer.name); setRenamingLayerId(lid); }
+              setLayerCtxMenu(null);
+            },
+          },
+          {
+            type: 'item',
+            label: 'Duplicate layer',
+            onClick: () => { layerActions.duplicateLayer(lid); setLayerCtxMenu(null); },
+          },
+          {
+            type: 'item',
+            label: 'Merge down',
+            onClick: () => { layerActions.mergeDown(lid); setLayerCtxMenu(null); },
+          },
+          { type: 'separator' },
+          {
+            type: 'item',
+            label: 'Delete layer',
+            danger: true,
+            onClick: () => { layerActions.removeLayer(lid); setLayerCtxMenu(null); },
+          },
+        ];
+        return (
+          <ContextMenu
+            items={items}
+            anchor={layerCtxMenu.anchor}
+            onClose={() => setLayerCtxMenu(null)}
+          />
+        );
+      })()}
+
+      {/* Tag context menu */}
+      {tagContextMenu && (
+        <div
+          className={styles.tagCtxMenu}
+          style={{ top: tagContextMenu.anchor.y, left: tagContextMenu.anchor.x }}
+          onMouseLeave={() => setTagContextMenu(null)}
+        >
+          <button
+            type="button"
+            className={styles.tagCtxItem}
+            onClick={() => {
+              tagActions.deleteTag(tagContextMenu.id);
+              setTagContextMenu(null);
+            }}
+          >
+            Delete tag
+          </button>
+        </div>
+      )}
     </div>
   );
 }

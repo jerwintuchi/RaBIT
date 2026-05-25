@@ -2,22 +2,24 @@ import { useState, useEffect, useLayoutEffect, lazy, Suspense } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { CanvasViewport } from './ui/canvas';
 import { ToolBar } from './ui/toolbar';
-import { LayerPanel, ColorPickerPanel, PalettePanel, Timeline } from './ui/panels';
+import { LayerPanel, ColorPickerPanel, PalettePanel, Timeline, ReferencePanel, NineSlicePanel } from './ui/panels';
 import { seedPerfFixture } from './ui/canvas/testFixture';
-import { frameActions, fileActions } from './state/action-composers';
+import { frameActions, fileActions, selectionActions } from './state/action-composers';
 import { useLayerStore } from './state/useLayerStore';
 import { useHistoryStore } from './state/useHistoryStore';
 import { useToolStore } from './state/useToolStore';
 import { usePaletteStore } from './state/usePaletteStore';
 import { useUIStore } from './state/useUIStore';
 import { usePrefsStore } from './state/usePrefsStore';
-import { getEngine } from './state/renderBridge';
+import { getEngine, setEngineTileMode, setEngineMirrorMode, setEngineReferenceImage, setEngineReferenceOpacity, setEngineReferenceVisible, setEngineReferencePosition, clearEngineReference } from './state/renderBridge';
+import { useReferenceStore } from './state/useReferenceStore';
+import { DirtyFlag } from './state/renderBridge';
 import { ipcGetRecentFiles, listenAutoSaveRequest } from './bridge/projectIpc';
 import { ipcPrefsLoad } from './bridge/prefsIpc';
 import { startFileWatchListener } from './bridge/fileWatchListener';
 import { ToastContainer } from './ui/primitives/Toast';
 import { SaveBadge } from './ui/primitives/SaveBadge';
-import { UnsavedChangesDialog, ExternalChangeDialog, NewProjectDialog, ResizeCanvasDialog, CrashRecoveryDialog, ExportDialog, PrefsDialog } from './ui/dialogs';
+import { UnsavedChangesDialog, ExternalChangeDialog, NewProjectDialog, ResizeCanvasDialog, CrashRecoveryDialog, ExportDialog, PrefsDialog, RotateConfirmDialog } from './ui/dialogs';
 import { WelcomeScreen } from './ui/screens';
 import { MenuBar } from './ui/menu';
 
@@ -88,6 +90,44 @@ export function App(): JSX.Element {
   // ── Dirty subscriptions (content changes → mark project dirty) ─────────────
   useEffect(() => {
     fileActions.startDirtySubscriptions();
+  }, []);
+
+  // ── Tile mode → engine ────────────────────────────────────────────────────
+  useEffect(() => {
+    let prev = useUIStore.getState().tileMode;
+    return useUIStore.subscribe((s) => {
+      if (s.tileMode === prev) return;
+      prev = s.tileMode;
+      setEngineTileMode(s.tileMode);
+      getEngine()?.markDirty(DirtyFlag.FULL);
+    });
+  }, []);
+
+  // ── Mirror mode → engine ──────────────────────────────────────────────────
+  useEffect(() => {
+    let { h: pH, v: pV } = useToolStore.getState().mirrorMode;
+    return useToolStore.subscribe((s) => {
+      if (s.mirrorMode.h === pH && s.mirrorMode.v === pV) return;
+      pH = s.mirrorMode.h;
+      pV = s.mirrorMode.v;
+      setEngineMirrorMode(s.mirrorMode);
+      getEngine()?.markDirty(DirtyFlag.OVERLAY);
+    });
+  }, []);
+
+  // ── Reference image → engine ──────────────────────────────────────────────
+  useEffect(() => {
+    return useReferenceStore.subscribe((ref) => {
+      if (ref.imageData) {
+        setEngineReferenceImage(ref.imageData, ref.width, ref.height);
+        setEngineReferenceOpacity(ref.opacity);
+        setEngineReferenceVisible(ref.visible);
+        setEngineReferencePosition(ref.position.x, ref.position.y);
+      } else {
+        clearEngineReference();
+      }
+      getEngine()?.markDirty(DirtyFlag.OVERLAY);
+    });
   }, []);
 
   // ── Crash recovery check (once on mount) ──────────────────────────────────
@@ -189,10 +229,57 @@ export function App(): JSX.Element {
         return;
       }
 
+      // Selection shortcuts
+      if (ctrl && e.key.toLowerCase() === 'a' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        selectionActions.selectAll();
+        return;
+      }
+      if (ctrl && e.key.toLowerCase() === 'd' && !e.altKey) {
+        e.preventDefault();
+        selectionActions.deselect();
+        return;
+      }
+      if (ctrl && e.key.toLowerCase() === 'x' && !e.altKey) {
+        e.preventDefault();
+        selectionActions.cutSelection();
+        return;
+      }
+      if (ctrl && e.key.toLowerCase() === 'c' && !e.altKey) {
+        e.preventDefault();
+        selectionActions.copySelection();
+        return;
+      }
+      if (ctrl && e.key.toLowerCase() === 'v' && !e.altKey) {
+        e.preventDefault();
+        selectionActions.pasteSelection();
+        return;
+      }
+
       // Frame shortcuts
       if (ctrl && e.altKey) {
         if (e.key.toLowerCase() === 'n') { e.preventDefault(); frameActions.addFrame(); return; }
         if (e.key.toLowerCase() === 'd') { e.preventDefault(); frameActions.duplicateActiveFrame(); return; }
+      }
+
+      // Tile mode
+      if (!ctrl && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        const { tileMode } = useUIStore.getState();
+        useUIStore.getState().setTileMode(!tileMode);
+        return;
+      }
+
+      // Mirror mode: Y = toggle H, Shift+Y = toggle V
+      if (!ctrl && !e.altKey && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        const state = useToolStore.getState();
+        if (e.shiftKey) {
+          state.setMirrorMode({ v: !state.mirrorMode.v });
+        } else {
+          state.setMirrorMode({ h: !state.mirrorMode.h });
+        }
+        return;
       }
 
       // Single-key tool / color shortcuts (no modifier) — from user keybindings
@@ -274,6 +361,7 @@ export function App(): JSX.Element {
           <div style={{ maxHeight: '40%', display: 'flex', minHeight: 0 }}>
             <PalettePanel />
           </div>
+          <ReferencePanel />
           <div style={{ flex: 1, minHeight: 0 }}>
             <LayerPanel />
           </div>
@@ -293,6 +381,8 @@ export function App(): JSX.Element {
       <CrashRecoveryDialog />
       <ExportDialog />
       <PrefsDialog />
+      <RotateConfirmDialog />
+      <NineSlicePanel />
       <SaveBadge />
       <ToastContainer />
     </>

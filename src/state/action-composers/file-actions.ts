@@ -1,4 +1,5 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { ipcLoadReferenceImage } from '../../bridge/referenceIpc';
 import { dtoToProject, projectToDto } from '../../bridge/projectSerializer';
 import {
   ipcAutoSaveCheckRecovery,
@@ -22,6 +23,7 @@ import { useHistoryStore } from '../useHistoryStore';
 import { useLayerStore } from '../useLayerStore';
 import { usePaletteStore } from '../usePaletteStore';
 import { useProjectStore } from '../useProjectStore';
+import { useReferenceStore } from '../useReferenceStore';
 import { toast, useUIStore } from '../useUIStore';
 import { initNewProject } from './project-init';
 
@@ -40,7 +42,7 @@ export function resolvePendingDiscard(confirmed: boolean): void {
 // ── Internal utilities ────────────────────────────────────────────────────────
 
 function snapshotProject(): Project {
-  const { meta, canvas } = useProjectStore.getState();
+  const { meta, canvas, referencePath } = useProjectStore.getState();
   const { layers, activeLayerId } = useLayerStore.getState();
   const { frames, activeFrameIndex, tags } = useFrameStore.getState();
   const { palette } = usePaletteStore.getState();
@@ -63,6 +65,7 @@ function snapshotProject(): Project {
     activeFrameIndex,
     zoomLevel,
     panOffset,
+    referencePath,
   };
 }
 
@@ -71,7 +74,7 @@ function nameFromPath(path: string): string {
   return base.replace(/\.rabit$/i, '') || base;
 }
 
-function hydrateFromDto(dto: ProjectDto, path: string): void {
+async function hydrateFromDto(dto: ProjectDto, path: string): Promise<void> {
   const project = dtoToProject(dto);
 
   useProjectStore.getState().resetProject(
@@ -97,6 +100,25 @@ function hydrateFromDto(dto: ProjectDto, path: string): void {
   useHistoryStore.getState().clear();
   useUIStore.getState().setZoomLevel(project.zoomLevel);
   useUIStore.getState().setPanOffset(project.panOffset);
+
+  // Clear any previous reference image
+  useReferenceStore.getState().clear();
+
+  // Re-load reference image if the project has one
+  const refPath = project.referencePath;
+  if (refPath) {
+    useProjectStore.getState().setReferencePath(refPath);
+    try {
+      const result = await ipcLoadReferenceImage(refPath);
+      const pixels = new Uint8ClampedArray(result.pixels);
+      useReferenceStore.getState().setImage(refPath, pixels, result.width, result.height);
+    } catch {
+      toast.error('Reference image not found');
+    }
+  }
+
+  // Restore clean state — loading is not a user edit (dirty subscriptions fire during hydration)
+  useProjectStore.getState().setDirty(false);
 }
 
 async function refreshRecentFiles(): Promise<void> {
@@ -200,7 +222,7 @@ export async function openProject(): Promise<boolean> {
     const result = await ipcOpenProject();
     if (!result) return false; // user cancelled
 
-    hydrateFromDto(result.project, result.path);
+    await hydrateFromDto(result.project, result.path);
     await syncWindowTitle();
     await refreshRecentFiles();
     return true;
@@ -215,7 +237,7 @@ export async function openProjectAt(path: string): Promise<boolean> {
 
   try {
     const result = await ipcOpenProjectAt(path);
-    hydrateFromDto(result.project, result.path);
+    await hydrateFromDto(result.project, result.path);
     useUIStore.getState().setWelcomeVisible(false);
     await syncWindowTitle();
     await refreshRecentFiles();
@@ -232,7 +254,7 @@ export async function openProjectAt(path: string): Promise<boolean> {
 export async function reloadFromDisk(path: string): Promise<void> {
   try {
     const result = await ipcOpenProjectAt(path);
-    hydrateFromDto(result.project, result.path);
+    await hydrateFromDto(result.project, result.path);
     useUIStore.getState().hideExternalChangeDialog();
     await syncWindowTitle();
   } catch (e) {
@@ -324,7 +346,7 @@ export async function markAutoSaveClean(): Promise<void> {
 export async function restoreRecovery(): Promise<void> {
   try {
     const result = await ipcAutoSaveRestore();
-    hydrateFromDto(result.project, result.path);
+    await hydrateFromDto(result.project, result.path);
     // Override name — recovered project is untitled until user saves
     useProjectStore.getState().setName('Recovered (Untitled)', false);
     useProjectStore.getState().setFilePath(null);
