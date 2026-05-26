@@ -49,7 +49,10 @@ Sizes assume one focused developer. Scale accordingly for parallel or context-sw
 | M11 | PNG + spritesheet export | M | M3, M8 | Internal beta |
 | M12 | Preferences + keybindings | S | M1, M2 | — |
 | M13 | 🚩 **Polish, performance audit, security review** | L | all prior | **v1.0 release candidate** |
-| M14+ | Post-MVP: selection tools (P1), GIF export (P1) | — | M13 | — |
+| M14 | P1 features: selection tools, GIF export, pixel-perfect, mirror, tile, frame tags, layer FX, reference image, nine-slice, palette-from-canvas | ✅ Done | M13 | — |
+| M15 | Painting depth: custom brush shapes + indexed color mode | M | M14 | — |
+| M16 | Layer & frame organization: layer groups + per-frame layer visibility | L | M15 | — |
+| M17 | Workflow utilities: spritesheet import + undo history panel | M | M14 | V2 release candidate |
 
 Total MVP scope: 13 milestones, estimated **15–22 weeks** end-to-end for a single focused developer.
 
@@ -528,4 +531,75 @@ At M13 completion, these files become the build history of v1.0.
 
 ---
 
-*End of Implementation Plan & Milestones v1.0*
+---
+
+## 9. V2 Milestones (M15–M17)
+
+These milestones extend RaBIT beyond the V1 feature set. They follow the same spec-driven workflow (Requirements → Design → Tasks → Implementation) as M0–M14. All three are approved and have full specs under `specs/`.
+
+---
+
+### M15 — Painting Depth
+**Size:** M
+**Depends on:** M14
+
+**Goal:** Make painting feel professional. Pixel artists need multi-pixel brushes and palette discipline — without these, RaBIT is slower than any comparable tool.
+
+**Features:**
+- **Custom Brush Shapes** — sizes 1–16px, square and round shapes, brush cursor overlay, `[`/`]` size shortcuts. Core change in `BrushTool.paintFootprint()`.
+- **Indexed Color Mode** — paint-time snap to nearest palette swatch; warning indicator on color well; "Quantize to palette" command in Edit menu; toggle in palette panel header.
+
+**Exit criteria:**
+- Painting with size-5 round brush writes a correct circular footprint
+- `[`/`]` keys adjust brush size while painting
+- With indexed mode on, every stroke snaps to the nearest palette color
+- "Quantize to palette" is undoable; pixels match the nearest swatch
+- `pnpm build` + `pnpm test` green
+
+**Specs:** `specs/custom-brush-shapes/`, `specs/indexed-color-mode/`
+
+---
+
+### M16 — Layer & Frame Organization
+**Size:** L
+**Depends on:** M15
+
+**Goal:** Support projects with many layers and complex animations. Flat layer lists and always-on visibility are limiting once a project has 10+ layers and 20+ frames.
+
+**Features:**
+- **Layer Groups** — one-level collapsible folders in layer panel + timeline; group has its own blend mode and opacity; group members composite into a temp FBO; cascade delete. Data model: `type: 'layer'|'group'` and `parentGroupId` on `Layer`.
+- **Per-Frame Layer Visibility** — `hiddenLayerIds: string[]` on `Frame`; toggle via right-click on timeline frame cell; diagonal-stripe indicator on hidden cells; global visibility always wins.
+
+**Exit criteria:**
+- Create a group, add 2 layers, collapse/expand; verify render output is correct
+- Per-frame hide: layer hidden on frame 2, visible on frame 1 and 3; verified visually and in export
+- Both features save/load correctly in `.rabit` format (old files still open)
+- `pnpm build` + `cargo build` + `pnpm test` green
+
+**Specs:** `specs/layer-groups/`, `specs/per-frame-layer-visibility/`
+
+---
+
+### M17 — Workflow & Import
+**Size:** M
+**Depends on:** M14 (can run in parallel with M16)
+
+**Goal:** Remove two of the most common workflow friction points: importing existing spritesheets, and navigating undo history without guesswork.
+
+**Features:**
+- **Spritesheet Import** — File → Import Spritesheet; Tauri IPC `import_image` loads PNG/BMP/WebP; dialog with live grid preview; single atomic command (one undo step); import as new project or append frames.
+- **Undo History Panel** — scrollable list of all undo/redo entries; click to jump to any point; hidden by default; toggled from View menu; no thumbnails.
+
+**Exit criteria:**
+- Import a 128×64 spritesheet with 8×8 cells → 16 frames created with correct pixels
+- Undo of the import removes all 16 frames in one step
+- Undo history panel shows correct entries; click on entry 3-back navigates correctly
+- Panel toggle persists across layout changes
+- `pnpm build` + `cargo build` + `pnpm test` green
+- **Release checkpoint:** V2 tag once M15 + M16 + M17 all complete.
+
+**Specs:** `specs/spritesheet-import/`, `specs/undo-history-panel/`
+
+---
+
+*End of Implementation Plan & Milestones v1.1*

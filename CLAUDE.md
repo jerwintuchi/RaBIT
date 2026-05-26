@@ -14,17 +14,20 @@ RaBIT (Raster + Bit creation system) is a professional-grade desktop pixel art a
 | 4 | Technical Stack Decision | ✅ Done | `docs/stack.md` |
 | 5 | Data Model + File Format | ✅ Done | `docs/data-model.md` |
 | 6 | Implementation Plan / Milestones | ✅ Done | `docs/milestones.md` |
-| 7 | Core Implementation (M0–M14 complete) | 🔨 Active — V1 pass + release tag pending | `src/` |
+| 7 | Core Implementation (M0–M14 complete; M15–M17 in progress) | 🔨 Active | `src/` |
 | 8 | Optimization + Refactoring | ⏳ Pending | — |
 
-**Phase 7 milestone summary (all shipped):**
-- M0–M6: Project scaffold, canvas, WebGL renderer, layer system, basic tools, undo/redo, file I/O
-- M7–M9: Timeline, frame animation, onion skinning, palette, color picker, auto-save, crash recovery
-- M10–M11: Export (PNG, spritesheet, GIF), preferences, keybindings
-- M12–M13: Selection tools (marquee, lasso, magic wand), floating selection, move tool, canvas resize
-- M14: Pixel-perfect mode, reference image, nine-slice preview, layer FX (outline), frame tags, palette-from-canvas, tile mode, mirror mode, GIF export
+**Phase 7 milestone summary:**
+- M0–M6: Project scaffold, canvas, WebGL renderer, layer system, basic tools, undo/redo, file I/O ✅
+- M7–M9: Timeline, frame animation, onion skinning, palette, color picker, auto-save, crash recovery ✅
+- M10–M11: Export (PNG, spritesheet, GIF), preferences, keybindings ✅
+- M12–M13: Selection tools (marquee, lasso, magic wand), floating selection, move tool, canvas resize ✅
+- M14: Pixel-perfect mode, reference image, nine-slice preview, layer FX (outline), frame tags, palette-from-canvas, tile mode, mirror mode, GIF export ✅
+- M15: **Painting depth** — custom brush shapes + indexed color mode ⏳ Specs approved, implementation pending
+- M16: **Layer & frame organization** — layer groups + per-frame layer visibility ⏳ Specs approved, implementation pending
+- M17: **Workflow & import** — spritesheet import + undo history panel ⏳ Specs approved, implementation pending
 
-**What remains before V1 release tag:** final QA pass, performance profiling, release packaging.
+**V2 release target:** M15 + M16 + M17 complete. See `docs/milestones.md` §9 for full exit criteria.
 
 ## Key Documents (read these before working on any phase)
 
@@ -60,7 +63,12 @@ RaBIT (Raster + Bit creation system) is a professional-grade desktop pixel art a
 
 **P1 — all complete:** GIF export, selection tools (marquee/lasso/magic wand), floating selection + move, canvas resize, pixel-perfect brush, mirror mode, tile mode, reference image, frame tags, layer FX (outline), palette-from-canvas, nine-slice preview.
 
-**P2 — not started:** Plugin system. Do not build ahead of current V1 release pass.
+**V2 (M15–M17) — specs approved, pending implementation:**
+- M15: Custom brush shapes (multi-pixel, square/round), indexed color mode
+- M16: Layer groups/folders, per-frame layer visibility
+- M17: Spritesheet import, undo history panel
+
+**P2 — not started:** Plugin system.
 
 ## Brand & Design Direction
 

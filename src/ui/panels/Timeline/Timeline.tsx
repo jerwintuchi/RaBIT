@@ -582,17 +582,6 @@ export function Timeline(): JSX.Element {
                 ) : (
                   <span className={styles.layerName}>{layer.name}</span>
                 )}
-                {layers.length > 1 && (
-                  <button
-                    type="button"
-                    className={styles.layerDeleteBtn}
-                    aria-label="Delete layer"
-                    title="Delete layer"
-                    onClick={(e) => { e.stopPropagation(); layerActions.removeLayer(layer.id); }}
-                  >
-                    <LuX size={11} />
-                  </button>
-                )}
               </div>
             ))}
           </div>

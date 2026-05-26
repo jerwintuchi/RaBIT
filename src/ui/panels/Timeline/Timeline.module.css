@@ -237,31 +237,6 @@
   height: 12px;
 }
 
-.layerDeleteBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  color: transparent;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: color 80ms, background 80ms;
-}
-
-.layerLabelRow:hover .layerDeleteBtn {
-  color: var(--accent-danger, #e05252);
-}
-
-.layerDeleteBtn:hover {
-  background: color-mix(in srgb, var(--accent-danger, #e05252) 15%, transparent);
-  color: var(--accent-danger, #e05252) !important;
-}
-
 .layerRenameInput {
   flex: 1;
   height: 20px;
