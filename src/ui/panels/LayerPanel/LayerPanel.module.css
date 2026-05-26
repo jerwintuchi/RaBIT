@@ -54,6 +54,15 @@
   cursor: not-allowed;
 }
 
+.headerButton.danger {
+  color: var(--accent-danger, #e05252);
+}
+
+.headerButton.danger:hover:not(:disabled) {
+  color: #ff6b6b;
+  background: color-mix(in srgb, var(--accent-danger, #e05252) 15%, transparent);
+}
+
 .headerButton svg {
   width: 14px;
   height: 14px;

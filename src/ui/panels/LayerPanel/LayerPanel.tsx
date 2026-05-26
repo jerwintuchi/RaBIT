@@ -224,7 +224,7 @@ export function LayerPanel(): JSX.Element {
           <Tooltip content="Delete layer" placement="left">
             <button
               type="button"
-              className={styles.headerButton}
+              className={`${styles.headerButton} ${styles.danger}`}
               aria-label="Delete layer"
               disabled={!activeLayerId || layers.length <= 1}
               onClick={onDelete}

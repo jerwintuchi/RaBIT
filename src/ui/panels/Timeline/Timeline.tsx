@@ -154,6 +154,23 @@ export function Timeline(): JSX.Element {
   // Pointer handlers live on frameGridRef (the scrollable container) so the
   // user can start a drag from any cell — not just the header strip.
   const frameGridRef = useRef<HTMLDivElement>(null);
+  const layerLabelsListRef = useRef<HTMLDivElement>(null);
+  const frameRowsScrollRef = useRef<HTMLDivElement>(null);
+  const syncingScrollRef = useRef(false);
+
+  const onLayerLabelsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (syncingScrollRef.current) return;
+    syncingScrollRef.current = true;
+    if (frameRowsScrollRef.current) frameRowsScrollRef.current.scrollTop = e.currentTarget.scrollTop;
+    syncingScrollRef.current = false;
+  };
+
+  const onFrameRowsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (syncingScrollRef.current) return;
+    syncingScrollRef.current = true;
+    if (layerLabelsListRef.current) layerLabelsListRef.current.scrollTop = e.currentTarget.scrollTop;
+    syncingScrollRef.current = false;
+  };
 
   const dragRef = useRef<{
     active: boolean;
@@ -523,7 +540,7 @@ export function Timeline(): JSX.Element {
         <div className={styles.layerLabels}>
           <div className={styles.tagRowSpacer} />
           <div className={styles.layerLabelsHeader}><span>Layer</span></div>
-          <div className={styles.layerLabelsList}>
+          <div ref={layerLabelsListRef} className={styles.layerLabelsList} onScroll={onLayerLabelsScroll}>
             {displayLayers.map((layer) => (
               <div
                 key={layer.id}
@@ -563,7 +580,18 @@ export function Timeline(): JSX.Element {
                     maxLength={64}
                   />
                 ) : (
-                  <span>{layer.name}</span>
+                  <span className={styles.layerName}>{layer.name}</span>
+                )}
+                {layers.length > 1 && (
+                  <button
+                    type="button"
+                    className={styles.layerDeleteBtn}
+                    aria-label="Delete layer"
+                    title="Delete layer"
+                    onClick={(e) => { e.stopPropagation(); layerActions.removeLayer(layer.id); }}
+                  >
+                    <LuX size={11} />
+                  </button>
                 )}
               </div>
             ))}
@@ -713,7 +741,8 @@ export function Timeline(): JSX.Element {
             )}
           </div>
 
-          {/* Per-layer frame rows */}
+          {/* Per-layer frame rows — vertically scrollable, synced with layer labels */}
+          <div ref={frameRowsScrollRef} className={styles.frameRowsScroll} onScroll={onFrameRowsScroll}>
           <div className={styles.frameRows}>
             {displayLayers.map((layer) => {
               const isActiveLayer = layer.id === activeLayerId;
@@ -740,6 +769,7 @@ export function Timeline(): JSX.Element {
                 </div>
               );
             })}
+          </div>
           </div>
         </div>
       </div>
