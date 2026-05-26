@@ -25,52 +25,24 @@ import styles from './Timeline.module.css';
 const FRAME_COL_W = 76; // px — must match .frameHeader width in CSS
 const THUMB_SIZE = 60;
 
-/** CPU-composite all visible layers of a frame into a tiny canvas and return a data-URL. */
-function computeThumb(frameIndex: number): string | null {
+/** Render a single layer's pixels for a frame into a tiny canvas and return a data-URL. */
+function computeThumb(frameIndex: number, layerId: string): string | null {
   const { frames } = useFrameStore.getState();
-  const { layers } = useLayerStore.getState();
   const frame = frames[frameIndex];
   if (!frame) return null;
 
-  const visibleLayers = layers.filter((l) => l.visible);
-  const layerIds = visibleLayers.map((l) => l.id);
+  const data = resolveCell(frames, frameIndex, layerId);
+  if (!data) return null;
 
-  let cw = 0;
-  let ch = 0;
-  for (const lid of layerIds) {
-    const data = resolveCell(frames, frameIndex, lid);
-    if (data) {
-      const side = Math.round(Math.sqrt(data.length / 4));
-      cw = side; ch = side;
-      break;
-    }
-  }
+  const side = Math.round(Math.sqrt(data.length / 4));
+  const cw = side, ch = side;
   if (!cw || !ch) return null;
-
-  const composite = new Uint8ClampedArray(cw * ch * 4);
-  for (const lid of layerIds) {
-    const data = resolveCell(frames, frameIndex, lid);
-    if (!data) continue;
-    const layerOpacity = visibleLayers.find((l) => l.id === lid)!.opacity;
-    for (let p = 0; p < cw * ch; p++) {
-      const i = p * 4;
-      const sa = (data[i + 3]! / 255) * layerOpacity;
-      if (sa === 0) continue;
-      const da = composite[i + 3]! / 255;
-      const oa = sa + da * (1 - sa);
-      if (oa === 0) continue;
-      composite[i]     = Math.round(((data[i]!     / 255) * sa + (composite[i]!     / 255) * da * (1 - sa)) / oa * 255);
-      composite[i + 1] = Math.round(((data[i + 1]! / 255) * sa + (composite[i + 1]! / 255) * da * (1 - sa)) / oa * 255);
-      composite[i + 2] = Math.round(((data[i + 2]! / 255) * sa + (composite[i + 2]! / 255) * da * (1 - sa)) / oa * 255);
-      composite[i + 3] = Math.round(oa * 255);
-    }
-  }
 
   const offscreen = document.createElement('canvas');
   offscreen.width = cw; offscreen.height = ch;
   const octx = offscreen.getContext('2d');
   if (!octx) return null;
-  octx.putImageData(new ImageData(composite, cw, ch), 0, 0);
+  octx.putImageData(new ImageData(new Uint8ClampedArray(data), cw, ch), 0, 0);
 
   const out = document.createElement('canvas');
   out.width = THUMB_SIZE; out.height = THUMB_SIZE;
@@ -80,13 +52,12 @@ function computeThumb(frameIndex: number): string | null {
   return out.toDataURL();
 }
 
-function ThumbCell({ frameIndex }: { frameIndex: number }): JSX.Element {
-  const dataVersions = useLayerStore((s) => s.dataVersions);
-  const versionKey = Object.values(dataVersions).join(',');
+function ThumbCell({ frameIndex, layerId }: { frameIndex: number; layerId: string }): JSX.Element {
+  const dataVersion = useLayerStore((s) => s.dataVersions[layerId] ?? 0);
   const src = useMemo(
-    () => computeThumb(frameIndex),
+    () => computeThumb(frameIndex, layerId),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [frameIndex, versionKey],
+    [frameIndex, layerId, dataVersion],
   );
   if (!src) return <div className={styles.frameCellEmpty} />;
   return <img src={src} className={styles.frameCellThumb} alt="" />;
@@ -127,7 +98,7 @@ function FrameCell({
   }
   return (
     <div className={cls} title={`Frame ${frameIndex + 1}`}>
-      <ThumbCell frameIndex={frameIndex} />
+      <ThumbCell frameIndex={frameIndex} layerId={layerId} />
     </div>
   );
 }

@@ -16,10 +16,6 @@ interface LayerRowProps {
   dropDisplayIdx: number | null;
   dropOnTopHalf: boolean;
   onSelect: (e: React.MouseEvent) => void;
-  onDragStart: (displayIdx: number) => void;
-  onDragOver: (e: React.DragEvent<HTMLElement>, displayIdx: number) => void;
-  onDrop: () => void;
-  onDragEnd: () => void;
 }
 
 export function LayerRow({
@@ -31,10 +27,6 @@ export function LayerRow({
   dropDisplayIdx,
   dropOnTopHalf,
   onSelect,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
 }: LayerRowProps): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(layer.name);
@@ -118,24 +110,12 @@ export function LayerRow({
         .join(' ')}
       role="option"
       aria-selected={active}
-      draggable={!editing}
+      data-display-idx={displayIdx}
       onClick={onSelect}
       onContextMenu={(e) => {
         e.preventDefault();
         setCtxMenu({ x: e.clientX, y: e.clientY });
       }}
-      onDragStart={(e) => {
-        e.dataTransfer.effectAllowed = 'move';
-        // Required by Firefox so the drag actually starts
-        e.dataTransfer.setData('text/plain', layer.id);
-        onDragStart(displayIdx);
-      }}
-      onDragOver={(e) => onDragOver(e, displayIdx)}
-      onDrop={(e) => {
-        e.preventDefault();
-        onDrop();
-      }}
-      onDragEnd={onDragEnd}
     >
       <button
         type="button"

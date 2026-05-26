@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useRef } from 'react';
 import { LuMerge, LuCopy } from 'react-icons/lu';
 import type { BlendMode } from '../../../state/dataModelTypes';
 import { useLayerStore } from '../../../state/useLayerStore';
@@ -33,6 +33,7 @@ export function LayerPanel(): JSX.Element {
 
   const handleRowSelect = useCallback(
     (layerId: string, displayIdx: number, e: React.MouseEvent) => {
+      if (justDraggedRef.current) { justDraggedRef.current = false; return; }
       if (e.ctrlKey || e.metaKey) {
         // Toggle this layer in the selection set; keep activeLayerId unchanged
         setSelectedIds((prev) => {
@@ -63,45 +64,82 @@ export function LayerPanel(): JSX.Element {
     [activeLayerId, displayLayers],
   );
 
-  // Drag-to-reorder state (display indices)
+  // ── Pointer-based drag-to-reorder ────────────────────────────────────────────
   const [dragSrc, setDragSrc] = useState<number | null>(null);
   const [dropInfo, setDropInfo] = useState<{ idx: number; topHalf: boolean } | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const dropInfoRef = useRef<{ idx: number; topHalf: boolean } | null>(null);
+  const justDraggedRef = useRef(false);
+  const dragStateRef = useRef({ active: false, pointerId: -1, srcDisplayIdx: -1, startY: 0, isDragging: false });
+  const DRAG_THRESHOLD = 5;
 
-  const onRowDragStart = (displayIdx: number) => {
-    setDragSrc(displayIdx);
+  const resolveDropInfo = (clientY: number): { idx: number; topHalf: boolean } | null => {
+    const rows = listRef.current?.querySelectorAll<HTMLElement>('[data-display-idx]');
+    if (!rows || rows.length === 0) return null;
+    for (const row of rows) {
+      const rect = row.getBoundingClientRect();
+      if (clientY >= rect.top && clientY < rect.bottom) {
+        const idx = parseInt(row.dataset.displayIdx ?? '0', 10);
+        return { idx, topHalf: clientY < rect.top + rect.height / 2 };
+      }
+    }
+    // Clamp beyond list edges
+    const first = rows[0]!.getBoundingClientRect();
+    if (clientY < first.top) return { idx: 0, topHalf: true };
+    const last = rows[rows.length - 1]!;
+    return { idx: parseInt(last.dataset.displayIdx ?? '0', 10), topHalf: false };
   };
 
-  const onRowDragOver = (e: React.DragEvent<HTMLElement>, displayIdx: number) => {
-    if (dragSrc === null) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    const rect = e.currentTarget.getBoundingClientRect();
-    const topHalf = e.clientY < rect.top + rect.height / 2;
-    setDropInfo((prev) =>
-      prev?.idx === displayIdx && prev.topHalf === topHalf ? prev : { idx: displayIdx, topHalf },
-    );
+  const onListPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('button, input')) return;
+    const row = (e.target as HTMLElement).closest<HTMLElement>('[data-display-idx]');
+    if (!row) return;
+    const srcIdx = parseInt(row.dataset.displayIdx ?? '-1', 10);
+    if (srcIdx === -1) return;
+    dragStateRef.current = { active: true, pointerId: e.pointerId, srcDisplayIdx: srcIdx, startY: e.clientY, isDragging: false };
   };
 
-  const onDragEnd = () => {
+  const onListPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const ds = dragStateRef.current;
+    if (!ds.active || ds.pointerId !== e.pointerId) return;
+    if (!ds.isDragging) {
+      if (Math.abs(e.clientY - ds.startY) < DRAG_THRESHOLD) return;
+      ds.isDragging = true;
+      listRef.current?.setPointerCapture(ds.pointerId);
+      setDragSrc(ds.srcDisplayIdx);
+    }
+    const info = resolveDropInfo(e.clientY);
+    dropInfoRef.current = info;
+    setDropInfo(info);
+  };
+
+  const onListPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const ds = dragStateRef.current;
+    if (!ds.active || ds.pointerId !== e.pointerId) return;
+    if (ds.isDragging) {
+      const info = dropInfoRef.current;
+      if (info !== null) {
+        const src = ds.srcDisplayIdx;
+        let slot = info.topHalf ? info.idx : info.idx + 1;
+        if (slot > src) slot -= 1;
+        if (slot !== src) {
+          layerActions.reorderLayer(layers.length - 1 - src, layers.length - 1 - slot);
+        }
+      }
+      justDraggedRef.current = true;
+    }
+    dragStateRef.current = { active: false, pointerId: -1, srcDisplayIdx: -1, startY: 0, isDragging: false };
+    dropInfoRef.current = null;
     setDragSrc(null);
     setDropInfo(null);
   };
 
-  const onDrop = () => {
-    if (dragSrc === null || dropInfo === null) {
-      onDragEnd();
-      return;
-    }
-    // Compute the target display "slot" — where the dragged row will land
-    let slot = dropInfo.topHalf ? dropInfo.idx : dropInfo.idx + 1;
-    // Account for the source's removal: slots after the source shift up by 1
-    if (slot > dragSrc) slot -= 1;
-    if (slot !== dragSrc) {
-      const fromArr = layers.length - 1 - dragSrc;
-      const toArr = layers.length - 1 - slot;
-      layerActions.reorderLayer(fromArr, toArr);
-    }
-    onDragEnd();
+  const onListPointerCancel = () => {
+    dragStateRef.current = { active: false, pointerId: -1, srcDisplayIdx: -1, startY: 0, isDragging: false };
+    dropInfoRef.current = null;
+    setDragSrc(null);
+    setDropInfo(null);
   };
 
   const onDuplicate = () => {
@@ -197,7 +235,16 @@ export function LayerPanel(): JSX.Element {
         </div>
       </div>
 
-      <div className={styles.list} role="listbox" aria-label="Layers">
+      <div
+        ref={listRef}
+        className={styles.list}
+        role="listbox"
+        aria-label="Layers"
+        onPointerDown={onListPointerDown}
+        onPointerMove={onListPointerMove}
+        onPointerUp={onListPointerUp}
+        onPointerCancel={onListPointerCancel}
+      >
         {displayLayers.map((layer, displayIdx) => (
           <LayerRow
             key={layer.id}
@@ -209,10 +256,6 @@ export function LayerPanel(): JSX.Element {
             dropDisplayIdx={dropInfo?.idx ?? null}
             dropOnTopHalf={dropInfo?.topHalf ?? false}
             onSelect={(e) => handleRowSelect(layer.id, displayIdx, e)}
-            onDragStart={onRowDragStart}
-            onDragOver={onRowDragOver}
-            onDrop={onDrop}
-            onDragEnd={onDragEnd}
           />
         ))}
       </div>
