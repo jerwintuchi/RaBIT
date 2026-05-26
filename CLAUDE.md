@@ -88,7 +88,7 @@ Read `.rabit-memory/agents-and-skills.md` for the full map. Summary:
   - `Plan` → module design before coding
   - `general-purpose` → library research, multi-step lookups
 - **Skills:** Invoke proactively when the trigger condition matches.
-  - `simplify` → after implementing any module
+  - `simplify` → after implementing any module; **before applying any deletion it proposes, check it against Section 11 (Protected UI Behaviors) and confirm with the user**
   - `security-review` → before any release checkpoint; after Rust IPC / file I/O work
   - `anthropic-skills:skill-creator` → when a recurring RaBIT workflow needs a dedicated skill
   - `anthropic-skills:consolidate-memory` → when `.rabit-memory/` grows redundant
@@ -273,3 +273,29 @@ Stop and ask for guidance when:
 - A requirement conflicts with the Architecture Principles
 - A change could affect the `.rabit` file format or export behavior
 - You are about to add a dependency, delete files, or modify Rust IPC / file I/O code
+
+---
+
+## 11. Protected UI Behaviors
+
+These features exist and must NOT be removed, replaced, or silently altered without explicit user approval. Before modifying any file listed here, re-read it fully and confirm every item in this table is still present after your change.
+
+| Feature | Location | What must remain |
+|---|---|---|
+| Layer context menu | `LayerRow.tsx` | Rename, Duplicate layer, Merge down, Delete layer (danger) |
+| Layer context menu | `Timeline.tsx` | Rename, Duplicate layer, Merge down, Delete layer (danger) |
+| Layer delete button | `Timeline.tsx` | Inline red ✕ button on each layer label row, hidden until hover |
+| Layer delete button | `LayerPanel.tsx` | Red trash icon in panel header toolbar |
+| Palette context menu (grid) | `PalettePanel.tsx` | Replace palette from canvas, Append canvas colors to palette |
+| Palette empty-state tooltip | `PalettePanel.tsx` | Tooltip on empty grid area explaining right-click options |
+| Frame context menu | `Timeline.tsx` | Duplicate frame, Delete frame buttons on each frame header |
+| HSV spinner intent refs | `HsvPicker.tsx` | `hRef/sRef/vRef` pattern — do not replace with derived state |
+| Viewport Space-pan guard | `useViewportInteraction.ts` | `isTypingTarget()` check — must skip Space handler in inputs |
+| Layer drag reorder | `LayerPanel.tsx` | Pointer-event drag on list container (NOT HTML5 DnD) |
+| Timeline scroll sync | `Timeline.tsx` | `layerLabelsListRef` / `frameRowsScrollRef` synchronized scroll |
+
+### Rules for this section
+
+1. **Read before touching.** Any edit to a file in the Location column requires reading that file first and verifying each row that references it is still intact after the change.
+2. **Simplify skill — deletions require confirmation.** When `/simplify` or any refactor agent proposes removing code from a protected file, surface the specific items being removed and wait for approval before applying.
+3. **Adding to this table.** After implementing any new user-visible behavior that should be permanent, add it here in the same session. Do not wait.
