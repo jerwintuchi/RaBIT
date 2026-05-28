@@ -30,6 +30,8 @@ interface FrameState {
   setFrameDuration(id: FrameId, duration: number): void;
   setCell(frameId: FrameId, layerId: LayerId, cell: Cell): void;
   linkCell(frameId: FrameId, layerId: LayerId): void;
+  setFrameLayerHidden(frameId: FrameId, layerId: LayerId, hidden: boolean): void;
+  setAllFramesLayerHidden(layerId: LayerId, hidden: boolean): void;
 
   addTag(tag: Tag): void;
   removeTag(id: TagId): void;
@@ -85,7 +87,7 @@ export const useFrameStore = create<FrameState>()(
           ? { linked: true, data: null }
           : { linked: false, data: cell.data ? new Uint8ClampedArray(cell.data) : null };
       }
-      const dup: Frame = { id: src.id, duration: src.duration, cells };
+      const dup: Frame = { id: src.id, duration: src.duration, cells, hiddenLayerIds: [...(src.hiddenLayerIds ?? [])] };
       const newFrame: Frame = { ...dup, id: nanoid(12) };
 
       set((s) => {
@@ -130,6 +132,32 @@ export const useFrameStore = create<FrameState>()(
       set((s) => {
         const f = s.frames.find((x) => x.id === frameId);
         if (f) f.cells[layerId] = makeLinkedCell();
+      });
+    },
+
+    setFrameLayerHidden(frameId, layerId, hidden) {
+      set((s) => {
+        const f = s.frames.find((x) => x.id === frameId);
+        if (!f) return;
+        if (!f.hiddenLayerIds) f.hiddenLayerIds = [];
+        if (hidden) {
+          if (!f.hiddenLayerIds.includes(layerId)) f.hiddenLayerIds.push(layerId);
+        } else {
+          f.hiddenLayerIds = f.hiddenLayerIds.filter((id) => id !== layerId);
+        }
+      });
+    },
+
+    setAllFramesLayerHidden(layerId, hidden) {
+      set((s) => {
+        for (const f of s.frames) {
+          if (!f.hiddenLayerIds) f.hiddenLayerIds = [];
+          if (hidden) {
+            if (!f.hiddenLayerIds.includes(layerId)) f.hiddenLayerIds.push(layerId);
+          } else {
+            f.hiddenLayerIds = f.hiddenLayerIds.filter((id) => id !== layerId);
+          }
+        }
       });
     },
 

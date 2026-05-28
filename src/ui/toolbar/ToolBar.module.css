@@ -52,3 +52,146 @@
   background: var(--border-subtle);
   margin: var(--space-1) 0;
 }
+
+/* ── Brush flyout (portal, fixed position) ─────────────────────────────── */
+
+.brushFlyout {
+  position: fixed;
+  z-index: 9000;
+  background: var(--bg-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 100px;
+  pointer-events: all;
+}
+
+.flyoutHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: 2px;
+}
+
+.flyoutToolName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.flyoutShortcut {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: var(--bg-2);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.flyoutDivider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 2px 0 4px;
+}
+
+.flyoutLabel {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary, var(--text-secondary));
+  text-transform: uppercase;
+  padding-bottom: 2px;
+}
+
+.flyoutGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.flyoutChip {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 1px;
+  padding: 4px 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 80ms, color 80ms, border-color 80ms;
+}
+
+.flyoutChip:hover:not(:disabled) {
+  background: var(--bg-3);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.flyoutChip:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.flyoutChipActive {
+  background: var(--accent-primary) !important;
+  color: #fff !important;
+  border-color: var(--accent-primary) !important;
+}
+
+.flyoutChipPx {
+  font-size: 8px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.flyoutShapeRow {
+  display: flex;
+  gap: 4px;
+}
+
+.flyoutShapeBtn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  font-size: 14px;
+  line-height: 1;
+  background: var(--bg-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 80ms, color 80ms, border-color 80ms;
+}
+
+.flyoutShapeBtn:hover {
+  background: var(--bg-3);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.flyoutNote {
+  font-size: 9px;
+  color: var(--text-tertiary, var(--text-secondary));
+  opacity: 0.7;
+  text-align: center;
+}
+
+.flyoutBracketHint {
+  font-size: 9px;
+  color: var(--text-tertiary, var(--text-secondary));
+  opacity: 0.55;
+  text-align: center;
+  font-family: var(--font-mono);
+}

@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { PencilTool } from './PencilTool';
-import { packRGBA, readPixel, writePixel } from '../DataModel';
+import { packRGBA, readPixel, writePixel, unpackRGBA } from '../DataModel';
 import type { CanvasPointerEvent, ToolEngineContext } from '../ToolEngine';
 import type { SelectionMask } from '../ToolEngine/types';
 import type { Command } from '../CommandSystem';
@@ -26,13 +26,21 @@ function pe(x: number, y: number): CanvasPointerEvent {
 function makeCtx(
   w: number,
   h: number,
-  opts: { pixelPerfect?: boolean; mirror?: { h: boolean; v: boolean } } = {},
+  opts: {
+    pixelPerfect?: boolean;
+    mirror?: { h: boolean; v: boolean };
+    brushSize?: number;
+    brushShape?: import('../DataModel').BrushShape;
+    snapColor?: (c: number) => number;
+  } = {},
 ) {
   const layerBuf = new Uint8ClampedArray(w * h * 4);
   const commands: Command[] = [];
   const state = { selection: null as SelectionMask | null };
   const pixelPerfect = opts.pixelPerfect ?? false;
   const mirror = opts.mirror ?? { h: false, v: false };
+  const brushSize = opts.brushSize ?? 1;
+  const brushShape = opts.brushShape ?? 'square';
 
   const ctx: ToolEngineContext = {
     getActiveLayerId: () => 'layer1',
@@ -60,6 +68,8 @@ function makeCtx(
     computeSelectionRust: async () => null,
     getMirrorMode: () => mirror,
     setLassoPreviewPath: () => {},
+    getBrushOptions: () => ({ size: brushSize, shape: brushShape as import('../DataModel').BrushShape }),
+    snapColorIfIndexed: opts.snapColor ?? ((c: number) => c),
   };
 
   return { ctx, layerBuf, commands };
@@ -240,5 +250,184 @@ describe('BrushTool — pixel-perfect ON', () => {
     expect(paintedPixels(commands[1]!).some((p) => p.x === 5 && p.y === 4)).toBe(false);
     expect(paintedPixels(commands[1]!).some((p) => p.x === 4 && p.y === 4)).toBe(true);
     expect(paintedPixels(commands[1]!).some((p) => p.x === 5 && p.y === 5)).toBe(true);
+  });
+});
+
+// ── computeOffsets — square shape ────────────────────────────────────────────
+
+describe('BrushTool.computeOffsets — square', () => {
+  const { ctx } = makeCtx(20, 20);
+  const tool = new PencilTool(ctx);
+
+  it('size 1 → 1 pixel', () => {
+    const offsets = tool.computeOffsets(1, 'square');
+    expect(offsets).toHaveLength(1);
+    expect(offsets[0]).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it('size 2 → exactly 4 pixels (2×2)', () => {
+    const offsets = tool.computeOffsets(2, 'square');
+    expect(offsets).toHaveLength(4);
+  });
+
+  it('size 3 → exactly 9 pixels (3×3)', () => {
+    const offsets = tool.computeOffsets(3, 'square');
+    expect(offsets).toHaveLength(9);
+  });
+
+  it('size 5 → exactly 25 pixels (5×5)', () => {
+    const offsets = tool.computeOffsets(5, 'square');
+    expect(offsets).toHaveLength(25);
+  });
+
+  it('size 16 → exactly 256 pixels (16×16)', () => {
+    const offsets = tool.computeOffsets(16, 'square');
+    expect(offsets).toHaveLength(256);
+  });
+
+  it('size 2 offsets start at (0,0) — asymmetric half for even size', () => {
+    const offsets = tool.computeOffsets(2, 'square');
+    expect(offsets.some((o) => o.dx === 0 && o.dy === 0)).toBe(true);
+    expect(offsets.some((o) => o.dx === 1 && o.dy === 1)).toBe(true);
+    expect(offsets.some((o) => o.dx === -1)).toBe(false);
+  });
+});
+
+// ── computeOffsets — round shape ─────────────────────────────────────────────
+
+describe('BrushTool.computeOffsets — round', () => {
+  const { ctx } = makeCtx(20, 20);
+  const tool = new PencilTool(ctx);
+
+  it('size 3 round → 5 pixels (plus shape)', () => {
+    const offsets = tool.computeOffsets(3, 'round');
+    expect(offsets).toHaveLength(5);
+  });
+
+  it('size 5 round → 13 pixels', () => {
+    const offsets = tool.computeOffsets(5, 'round');
+    expect(offsets).toHaveLength(13);
+  });
+
+  it('round offsets exclude corners — (±hi, ±hi) absent for size 3', () => {
+    const offsets = tool.computeOffsets(3, 'round');
+    expect(offsets.some((o) => o.dx === 1 && o.dy === 1)).toBe(false);
+    expect(offsets.some((o) => o.dx === -1 && o.dy === -1)).toBe(false);
+  });
+});
+
+// ── multi-pixel brush painting ────────────────────────────────────────────────
+
+describe('BrushTool — multi-pixel footprint', () => {
+  it('size 3 square single click paints 9 pixels centered at cursor', () => {
+    const W = 20, H = 20;
+    const { ctx, commands } = makeCtx(W, H, { brushSize: 3, brushShape: 'square' });
+    const tool = new PencilTool(ctx);
+
+    tool.onPointerDown(pe(5, 5));
+    tool.onPointerUp(pe(5, 5));
+
+    const pixels = paintedPixels(commands[0]!);
+    expect(pixels).toHaveLength(9);
+    // Center pixel
+    expect(pixels.some((p) => p.x === 5 && p.y === 5)).toBe(true);
+    // All corners of 3×3 centered at (5,5)
+    expect(pixels.some((p) => p.x === 4 && p.y === 4)).toBe(true);
+    expect(pixels.some((p) => p.x === 6 && p.y === 6)).toBe(true);
+  });
+
+  it('size 2 square single click paints 4 pixels (not 9)', () => {
+    const W = 20, H = 20;
+    const { ctx, commands } = makeCtx(W, H, { brushSize: 2, brushShape: 'square' });
+    const tool = new PencilTool(ctx);
+
+    tool.onPointerDown(pe(5, 5));
+    tool.onPointerUp(pe(5, 5));
+
+    expect(paintedPixels(commands[0]!)).toHaveLength(4);
+  });
+
+  it('size 3 round single click paints 5 pixels', () => {
+    const W = 20, H = 20;
+    const { ctx, commands } = makeCtx(W, H, { brushSize: 3, brushShape: 'round' });
+    const tool = new PencilTool(ctx);
+
+    tool.onPointerDown(pe(5, 5));
+    tool.onPointerUp(pe(5, 5));
+
+    expect(paintedPixels(commands[0]!)).toHaveLength(5);
+  });
+
+  it('pixel-perfect does not override multi-pixel brush size in the engine (UI enforces size 1 via disabled chips)', () => {
+    // PP mode only enables elbow removal when offsets.length === 1.
+    // getBrushOptions() returns the raw configured size; it does not clamp to 1.
+    const W = 20, H = 20;
+    const { ctx, commands } = makeCtx(W, H, { brushSize: 5, brushShape: 'square', pixelPerfect: true });
+    const tool = new PencilTool(ctx);
+
+    tool.onPointerDown(pe(5, 5));
+    tool.onPointerUp(pe(5, 5));
+
+    expect(paintedPixels(commands[0]!)).toHaveLength(25); // 5×5 footprint, PP has no effect at this size
+  });
+});
+
+// ── snapColorIfIndexed ────────────────────────────────────────────────────────
+
+describe('BrushTool — snapColorIfIndexed', () => {
+  const BLUE  = packRGBA(0,   0,   255, 255);
+  const RED   = packRGBA(255, 0,   0,   255);
+  const GREEN = packRGBA(0,   255, 0,   255);
+
+  it('passes color through unchanged when snap function is identity', () => {
+    const W = 10, H = 10;
+    const { ctx, commands } = makeCtx(W, H, {
+      snapColor: (c) => c,
+    });
+    // Override primary to BLUE
+    ctx.getPrimaryColor = () => BLUE;
+    const tool = new PencilTool(ctx);
+    tool.onPointerDown(pe(2, 2));
+    tool.onPointerUp(pe(2, 2));
+
+    const [delta] = (commands[0] as any).deltas;
+    const [r, g, b] = unpackRGBA(delta.after as number);
+    expect(r).toBe(0); expect(g).toBe(0); expect(b).toBe(255);
+  });
+
+  it('snaps color to nearest when indexed mode is active', () => {
+    const W = 10, H = 10;
+    // snapColor replaces BLUE-ish with RED (simulating nearest-swatch snap)
+    const { ctx, commands } = makeCtx(W, H, {
+      snapColor: () => RED,
+    });
+    ctx.getPrimaryColor = () => BLUE;
+    const tool = new PencilTool(ctx);
+    tool.onPointerDown(pe(2, 2));
+    tool.onPointerUp(pe(2, 2));
+
+    const [delta] = (commands[0] as any).deltas;
+    const [r, g, b] = unpackRGBA(delta.after as number);
+    expect(r).toBe(255); expect(g).toBe(0); expect(b).toBe(0);
+  });
+
+  it('all pixels in a multi-pixel stroke use the snapped color', () => {
+    const W = 20, H = 20;
+    const { ctx, commands } = makeCtx(W, H, {
+      brushSize: 3,
+      brushShape: 'square',
+      snapColor: () => GREEN,
+    });
+    ctx.getPrimaryColor = () => BLUE;
+    const tool = new PencilTool(ctx);
+    tool.onPointerDown(pe(5, 5));
+    tool.onPointerUp(pe(5, 5));
+
+    const pixels = paintedPixels(commands[0]!);
+    expect(pixels).toHaveLength(9);
+    for (const d of (commands[0] as any).deltas.filter((x: any) => x.after !== 0)) {
+      const [r, , b] = unpackRGBA(d.after as number);
+      expect(r).toBe(0); expect(b).toBe(0); // green: r=0, b=0
+    }
   });
 });

@@ -11,6 +11,10 @@ export type RGBA = number;
 
 export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay' | 'add' | 'subtract';
 
+export type LayerType = 'layer' | 'group';
+
+export type BrushShape = 'square' | 'round';
+
 export type LoopDirection = 'forward' | 'reverse' | 'ping-pong';
 
 export type ColorMode = 'rgba';
@@ -26,10 +30,13 @@ export interface CanvasConfig {
 export interface Layer {
   id: LayerId;
   name: string; // 1–64 chars UTF-8
+  type: LayerType; // 'layer' | 'group' — default 'layer'
+  parentGroupId: LayerId | null; // null = top-level
   visible: boolean;
   locked: boolean;
   opacity: number; // 0.0–1.0
   blendMode: BlendMode;
+  collapsed?: boolean; // group only — controls panel/timeline display
 }
 
 export interface Cell {
@@ -42,6 +49,7 @@ export interface Frame {
   id: FrameId;
   duration: number; // ms, 10–10000, default 100
   cells: Record<LayerId, Cell>; // sparse — only populated cells present
+  hiddenLayerIds: LayerId[]; // per-frame layer visibility overrides (default [])
 }
 
 export interface Swatch {

@@ -1,4 +1,4 @@
-import type { LayerId, RGBA } from '../DataModel';
+import type { LayerId, RGBA, BrushShape } from '../DataModel';
 import { readPixel, writePixel } from '../DataModel';
 import type {
   CanvasPointerEvent,
@@ -31,6 +31,9 @@ export abstract class BrushTool implements Tool {
   private layerBuf: Uint8ClampedArray | null = null;
   private deltas = new Map<number, PixelDelta>();
   private color: RGBA = 0;
+
+  // Brush footprint offsets — computed once per stroke from size + shape.
+  private offsets: Array<{ dx: number; dy: number }> = [{ dx: 0, dy: 0 }];
 
   // Pixel-perfect: tracks the last 3 main-path positions to detect L-shaped elbows.
   private _ppHistory: { x: number; y: number }[] = [];
@@ -73,7 +76,10 @@ export abstract class BrushTool implements Tool {
     this.deltas.clear();
     this._ppHistory.length = 0;
 
-    this.paintPixel(e.canvasX, e.canvasY);
+    const { size, shape } = this.ctx.getBrushOptions();
+    this.offsets = this.computeOffsets(size, shape);
+
+    this.paintFootprint(e.canvasX, e.canvasY);
     this.lastX = e.canvasX;
     this.lastY = e.canvasY;
     this.ctx.updateScratch(this.scratch!);
@@ -86,6 +92,23 @@ export abstract class BrushTool implements Tool {
     this.lastX = e.canvasX;
     this.lastY = e.canvasY;
     this.ctx.updateScratch(this.scratch!);
+  }
+
+  /** Returns the brush footprint offsets for a given size and shape.
+   *  Uses asymmetric halves so even sizes paint exactly NxN pixels. */
+  computeOffsets(size: number, shape: BrushShape): Array<{ dx: number; dy: number }> {
+    if (size <= 1) return [{ dx: 0, dy: 0 }];
+    const lo = -Math.floor((size - 1) / 2);
+    const hi = Math.floor(size / 2);
+    const offsets: Array<{ dx: number; dy: number }> = [];
+    for (let dy = lo; dy <= hi; dy++) {
+      for (let dx = lo; dx <= hi; dx++) {
+        if (shape === 'square' || dx * dx + dy * dy <= hi * hi) {
+          offsets.push({ dx, dy });
+        }
+      }
+    }
+    return offsets.length > 0 ? offsets : [{ dx: 0, dy: 0 }];
   }
 
   onPointerUp(_e: CanvasPointerEvent): void {
@@ -138,6 +161,12 @@ export abstract class BrushTool implements Tool {
     }
   }
 
+  private paintFootprint(cx: number, cy: number): void {
+    for (const { dx, dy } of this.offsets) {
+      this.paintPixel(cx + dx, cy + dy);
+    }
+  }
+
   private paintPixel(x: number, y: number): void {
     const w = this.scratchW;
     const h = this.scratchH;
@@ -152,9 +181,8 @@ export abstract class BrushTool implements Tool {
     }
     writePixel(this.scratch, x, y, w, this.scratchColor());
 
-    // Pixel-perfect: track main-path history (skip duplicates from plotLine
-    // re-painting the segment start pixel) and remove L-shaped elbows.
-    if (this.ctx.getPixelPerfect()) {
+    // Pixel-perfect: only active for 1px brush; multi-pixel brushes skip it.
+    if (this.ctx.getPixelPerfect() && this.offsets.length === 1) {
       const last = this._ppHistory[this._ppHistory.length - 1];
       if (!last || last.x !== x || last.y !== y) {
         this._ppHistory.push({ x, y });
@@ -226,7 +254,7 @@ export abstract class BrushTool implements Tool {
     let y = y0;
     const maxSteps = this.scratchW * this.scratchH + 1;
     for (let step = 0; step < maxSteps; step++) {
-      this.paintPixel(x, y);
+      this.paintFootprint(x, y);
       if (x === x1 && y === y1) return;
       const e2 = 2 * err;
       if (e2 > -dy) {

@@ -22,6 +22,7 @@ import {
 } from '../core/tools';
 import type { Command } from '../core/CommandSystem';
 import { packRGBA } from '../core/DataModel';
+import { nearestSwatchColor } from '../core/DataModel/colorConversion';
 import { useFrameStore } from './useFrameStore';
 import { useLayerStore } from './useLayerStore';
 import { useProjectStore } from './useProjectStore';
@@ -96,6 +97,16 @@ function buildContext(): ToolEngineContext {
     getMagicWandTolerance: () => useToolStore.getState().options['magic-wand'].tolerance,
     getMirrorMode: () => useToolStore.getState().mirrorMode,
     setLassoPreviewPath: (path) => useToolStore.getState().setLassoPreviewPath(path),
+    getBrushOptions: () => {
+      const { activeTool, options } = useToolStore.getState();
+      if (activeTool === 'eraser') return { size: options.eraser.size, shape: options.eraser.brushShape };
+      return { size: options.pencil.size, shape: options.pencil.brushShape };
+    },
+    snapColorIfIndexed: (color) => {
+      const { indexedMode, palette } = usePaletteStore.getState();
+      if (!indexedMode || palette.swatches.length === 0) return color;
+      return nearestSwatchColor(color, palette.swatches);
+    },
     getCompositedPixels: () => readAllCompositedPixels(),
     computeSelectionRust: async (x: number, y: number, tolerance: number): Promise<SelectionMask | null> => {
       const pixels = readAllCompositedPixels();

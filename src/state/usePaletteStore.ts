@@ -10,8 +10,10 @@ interface PaletteState {
   primaryColor: RGBA;
   secondaryColor: RGBA;
   colorHistory: RGBA[];
+  indexedMode: boolean;
 
   setPalette(palette: Palette): void;
+  setIndexedMode(on: boolean): void;
   addSwatch(color: RGBA, name?: string): void;
   removeSwatch(index: number): void;
   updateSwatch(index: number, patch: Partial<Swatch>): void;
@@ -33,6 +35,11 @@ export const usePaletteStore = create<PaletteState>()(
     primaryColor: BLACK,
     secondaryColor: WHITE,
     colorHistory: [],
+    indexedMode: false,
+
+    setIndexedMode(on) {
+      set((s) => { s.indexedMode = on; });
+    },
 
     setPalette(palette) {
       set((s) => {

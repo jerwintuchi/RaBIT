@@ -45,7 +45,7 @@ export class RectangleTool implements Tool {
     this.active = true;
     this.layerId = layerId;
     this.layerBuf = layerBuf;
-    this.color = this.ctx.getPrimaryColor();
+    this.color = this.ctx.snapColorIfIndexed(this.ctx.getPrimaryColor());
     this.startX = e.canvasX;
     this.startY = e.canvasY;
 

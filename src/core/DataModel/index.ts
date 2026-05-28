@@ -6,6 +6,8 @@ export type {
   PaletteId,
   RGBA,
   BlendMode,
+  BrushShape,
+  LayerType,
   LoopDirection,
   ColorMode,
   CanvasConfig,
@@ -21,6 +23,7 @@ export type {
 export {
   makeCanvasConfig,
   makeLayer,
+  makeLayerGroup,
   makeCell,
   makeLinkedCell,
   makeFrame,
@@ -32,7 +35,7 @@ export {
 
 export { packRGBA, unpackRGBA, readPixel, writePixel } from './pixels';
 
-export { rgbToHsv, hsvToRgb, rgbaToHex, parseHex } from './colorConversion';
+export { rgbToHsv, hsvToRgb, rgbaToHex, parseHex, nearestSwatchColor } from './colorConversion';
 export type { HSV } from './colorConversion';
 
 export { parseGPL, parseHexList, parseCSV, parsePaletteFile } from './paletteImport';

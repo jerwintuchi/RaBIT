@@ -15,6 +15,8 @@ export interface RenderLayerSpec {
   visible: boolean;
   opacity: number;
   blendMode: BlendMode;
+  isGroup?: boolean;
+  parentGroupId?: string | null;
 }
 
 export interface ViewTransform {

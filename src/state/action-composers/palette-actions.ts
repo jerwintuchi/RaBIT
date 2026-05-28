@@ -1,17 +1,20 @@
 import type { RGBA, Swatch, ImportedSwatch } from '../../core/DataModel';
-import { makeSwatch, makePalette, parsePaletteFile } from '../../core/DataModel';
+import { makeSwatch, makePalette, parsePaletteFile, nearestSwatchColor, readPixel } from '../../core/DataModel';
 import { useFrameStore } from '../useFrameStore';
 import { useLayerStore } from '../useLayerStore';
+import { useProjectStore } from '../useProjectStore';
 import { resolveCell } from './frame-utils';
 import {
   AddSwatchCommand,
   RemoveSwatchCommand,
   UpdateSwatchCommand,
   MoveSwatchCommand,
+  QuantizeToPaletteCommand,
   type PaletteCommandDeps,
 } from '../../core/commands/PaletteCommands';
 import { usePaletteStore } from '../usePaletteStore';
 import { useHistoryStore } from '../useHistoryStore';
+import { getEngine, uploadLayerData, DirtyFlag } from '../renderBridge';
 
 let _deps: PaletteCommandDeps | null = null;
 
@@ -138,6 +141,39 @@ export function buildFromCanvas(mode: 'replace' | 'append'): void {
   for (const c of colors) {
     if (!existingColors.has(c)) store.addSwatch(c);
   }
+}
+
+export function quantizeToPalette(): void {
+  const { palette } = usePaletteStore.getState();
+  if (palette.swatches.length === 0) return;
+  const { layers } = useLayerStore.getState();
+  const { frames, activeFrameIndex } = useFrameStore.getState();
+  const { width } = useProjectStore.getState().canvas;
+
+  const notifyLayer = (id: string, data: Uint8ClampedArray) => {
+    uploadLayerData(id, data);
+    getEngine()?.markDirty(DirtyFlag.LAYER_DATA);
+    useLayerStore.getState().bumpDataVersion(id);
+  };
+
+  const ops = [];
+  for (const layer of layers) {
+    if (layer.locked) continue;
+    const buf = resolveCell(frames, activeFrameIndex, layer.id);
+    if (!buf) continue;
+    const pixelCount = buf.length / 4;
+    const deltas: Array<{ offset: number; before: RGBA; after: RGBA }> = [];
+    for (let p = 0; p < pixelCount; p++) {
+      if (buf[p * 4 + 3] === 0) continue;
+      const before = readPixel(buf, p % width, (p / width) | 0, width);
+      const after = nearestSwatchColor(before, palette.swatches);
+      if (before !== after) deltas.push({ offset: p, before, after });
+    }
+    if (deltas.length > 0) ops.push({ layerId: layer.id, deltas, buf, width, notify: notifyLayer });
+  }
+
+  if (ops.length === 0) return;
+  useHistoryStore.getState().execute(new QuantizeToPaletteCommand(ops));
 }
 
 export function renameSwatch(index: number, name: string | null): void {

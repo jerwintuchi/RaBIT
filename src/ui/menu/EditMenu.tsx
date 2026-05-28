@@ -1,7 +1,8 @@
 import { useUIStore } from '../../state/useUIStore';
 import { useHistoryStore } from '../../state/useHistoryStore';
-import { canvasActions, selectionActions, layerFxActions } from '../../state/action-composers';
+import { canvasActions, selectionActions, layerFxActions, paletteActions } from '../../state/action-composers';
 import { useToolStore } from '../../state/useToolStore';
+import { usePaletteStore } from '../../state/usePaletteStore';
 import { useDropdownMenu } from './useDropdownMenu';
 import { MenuItem } from './FileMenu';
 import styles from './FileMenu.module.css';
@@ -13,6 +14,7 @@ export function EditMenu() {
   const canRedo = useHistoryStore((s) => s.canRedo());
   const hasSelection = useToolStore((s) => s.selection !== null && s.selection.data.length > 1);
   const hasClipboard = useToolStore((s) => s.selectionClipboard !== null);
+  const hasPalette = usePaletteStore((s) => s.palette.swatches.length > 0);
 
   const pos = open ? getDropdownPos() : { top: 28, left: 0 };
 
@@ -118,6 +120,14 @@ export function EditMenu() {
           <MenuItem
             label="Outline Layer"
             onClick={() => { close(); layerFxActions.outlineLayer(); }}
+          />
+
+          <div className={styles.separator} />
+
+          <MenuItem
+            label="Quantize to Palette"
+            disabled={!hasPalette}
+            onClick={() => { close(); paletteActions.quantizeToPalette(); }}
           />
         </div>
       )}

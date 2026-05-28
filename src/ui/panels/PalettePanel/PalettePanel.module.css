@@ -83,6 +83,11 @@
   height: 14px;
 }
 
+.headerButtonActive {
+  color: var(--accent-primary);
+  background: var(--bg-3);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, var(--swatch-size, 20px));

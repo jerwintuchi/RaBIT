@@ -18,6 +18,7 @@ uniform float u_opacity;
 uniform int u_blendMode;
 uniform sampler2D u_scratch;
 uniform int u_applyErase;
+uniform int u_flipLayerY; // 1 when u_layer is an FBO texture (canvas-top at v=1)
 
 vec3 blendMultiply(vec3 s, vec3 d) { return s * d; }
 vec3 blendScreen(vec3 s, vec3 d)   { return 1.0 - (1.0 - s) * (1.0 - d); }
@@ -33,7 +34,8 @@ void main() {
   // so canvas top is at v=1. Flip Y when reading the accumulated composite so that both
   // textures are sampled at the same canvas position for any given v_uv.
   vec2 uvFlipped = vec2(v_uv.x, 1.0 - v_uv.y);
-  vec4 layer = texture(u_layer, v_uv);
+  vec2 layerUv = u_flipLayerY != 0 ? uvFlipped : v_uv;
+  vec4 layer = texture(u_layer, layerUv);
   vec4 comp  = texture(u_composite, uvFlipped);
 
   // u_scratch was uploaded with UNPACK_FLIP_Y; sample with flipped Y to match u_layer coordinates.

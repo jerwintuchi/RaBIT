@@ -2,7 +2,9 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { isInSelection } from '../core/ToolEngine/types';
 import type { SelectionMask } from '../core/ToolEngine/types';
+import type { BrushShape } from '../core/DataModel';
 export type { SelectionMask } from '../core/ToolEngine/types';
+export type { BrushShape } from '../core/DataModel';
 export { isInSelection };
 
 export type ToolId =
@@ -24,11 +26,13 @@ export interface PencilOptions {
   size: number;
   opacity: number;
   pixelPerfect: boolean;
+  brushShape: BrushShape;
 }
 
 export interface EraserOptions {
   size: number;
   opacity: number;
+  brushShape: BrushShape;
 }
 
 export interface FillOptions {
@@ -94,8 +98,8 @@ interface ToolState {
 }
 
 const defaultOptions: ToolOptions = {
-  pencil: { size: 1, opacity: 1, pixelPerfect: true },
-  eraser: { size: 1, opacity: 1 },
+  pencil: { size: 1, opacity: 1, pixelPerfect: true, brushShape: 'square' },
+  eraser: { size: 1, opacity: 1, brushShape: 'square' },
   fill: { tolerance: 0, contiguous: true },
   line: { size: 1 },
   zoom: { mode: 'in' },

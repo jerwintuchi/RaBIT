@@ -1,8 +1,11 @@
+import { nanoid } from 'nanoid';
 import type { BlendMode, Cell, FrameId, LayerId } from '../../core/DataModel';
-import { makeCell, makeLayer } from '../../core/DataModel';
+import { makeCell, makeLayer, makeLayerGroup } from '../../core/DataModel';
 import {
   AddLayerCommand,
+  AddGroupCommand,
   RemoveLayerCommand,
+  RemoveGroupWithMembersCommand,
   ReorderLayerCommand,
   SetLayerOpacityCommand,
   SetBlendModeCommand,
@@ -55,16 +58,19 @@ function getDeps(): LayerCommandDeps {
       const layers = useLayerStore.getState().layers;
       const engine = getEngine();
       if (!engine) return;
+      const { frames, activeFrameIndex } = useFrameStore.getState();
+      const frameHidden = new Set(frames[activeFrameIndex]?.hiddenLayerIds ?? []);
       engine.setLayers(
         layers.map((l) => ({
           id: l.id,
-          visible: l.visible,
+          visible: l.visible && !frameHidden.has(l.id),
           opacity: l.opacity,
           blendMode: l.blendMode,
+          isGroup: l.type === 'group',
+          parentGroupId: l.parentGroupId,
         })),
       );
       // Re-upload pixel data for current frame so newly-added layers render
-      const { frames, activeFrameIndex } = useFrameStore.getState();
       for (const layer of layers) {
         const data = resolveCell(frames, activeFrameIndex, layer.id);
         if (data) uploadLayerData(layer.id, data);
@@ -77,16 +83,40 @@ function getDeps(): LayerCommandDeps {
 
 // ── Public actions called by the UI ────────────────────────────────────────
 
-export function addLayer(name?: string): void {
+export function addLayer(name?: string, inGroupId?: string | null): void {
   const { layers, activeLayerId } = useLayerStore.getState();
   const { frames } = useFrameStore.getState();
   const { canvas } = useProjectStore.getState();
-  const layer = makeLayer({ name: name ?? `Layer ${layers.length + 1}` });
+
+  // Determine which group (if any) the new layer should belong to.
+  // Priority: explicit inGroupId → active layer is a group → active layer is a child
+  let parentGroupId: string | null = inGroupId ?? null;
+  if (parentGroupId === undefined || parentGroupId === null) {
+    const activeLayer = layers.find((l) => l.id === activeLayerId);
+    if (activeLayer?.type === 'group') {
+      parentGroupId = activeLayer.id;
+    } else if (activeLayer?.parentGroupId) {
+      parentGroupId = activeLayer.parentGroupId;
+    }
+  }
+
+  const layer = makeLayer({
+    name: name ?? `Layer ${layers.length + 1}`,
+    parentGroupId: parentGroupId ?? null,
+  });
 
   // New layer gets a fresh blank cell in every frame
   const cellsByFrame = new Map<FrameId, Cell>();
   for (const f of frames) {
     cellsByFrame.set(f.id, makeCell(canvas.width, canvas.height));
+  }
+
+  // When adding to a group, insert just before the group in the array so the
+  // new child appears immediately below the group header in the reversed panel display.
+  let insertIndex = layers.length;
+  if (parentGroupId) {
+    const groupIdx = layers.findIndex((l) => l.id === parentGroupId);
+    if (groupIdx !== -1) insertIndex = groupIdx;
   }
 
   useHistoryStore
@@ -95,7 +125,7 @@ export function addLayer(name?: string): void {
       new AddLayerCommand(
         layer,
         cellsByFrame,
-        layers.length,
+        insertIndex,
         activeLayerId,
         getDeps(),
       ),
@@ -106,9 +136,48 @@ export function removeLayer(layerId: LayerId): void {
   const { layers, activeLayerId } = useLayerStore.getState();
   const idx = layers.findIndex((l) => l.id === layerId);
   if (idx === -1) return;
-  if (layers.length === 1) return; // refuse to delete the last layer
 
   const layer = layers[idx]!;
+
+  // Group: cascade-delete all children in one undoable command
+  if (layer.type === 'group') {
+    const members = layers
+      .map((l, i) => ({ l, i }))
+      .filter(({ l }) => l.parentGroupId === layerId);
+
+    // Refuse to delete the last layer (group + members would remove everything)
+    const nonGroupCount = layers.filter((l) => l.type !== 'group').length;
+    if (members.length >= nonGroupCount) return;
+
+    const { frames } = useFrameStore.getState();
+    const memberData = members.map(({ l, i }) => {
+      const cellsByFrame = new Map<FrameId, Cell>();
+      for (const f of frames) {
+        const cell = f.cells[l.id];
+        if (cell) cellsByFrame.set(f.id, cloneCell(cell));
+      }
+      return { layer: l, index: i, cellsByFrame };
+    });
+
+    const remainingAfter = layers.filter((l) => l.id !== layerId && l.parentGroupId !== layerId);
+    const nextActive = remainingAfter[Math.max(0, idx - 1)]?.id ?? remainingAfter[0]?.id ?? null;
+
+    useHistoryStore.getState().execute(
+      new RemoveGroupWithMembersCommand(
+        layer,
+        idx,
+        memberData,
+        activeLayerId,
+        nextActive,
+        getDeps(),
+      ),
+    );
+    return;
+  }
+
+  // Regular layer
+  if (layers.filter((l) => l.type === 'layer').length <= 1) return; // refuse to delete last layer
+
   const { frames } = useFrameStore.getState();
   const cellsByFrame = new Map<FrameId, Cell>();
   for (const f of frames) {
@@ -142,6 +211,7 @@ export function duplicateLayer(layerId: LayerId): void {
     locked: src.locked,
     opacity: src.opacity,
     blendMode: src.blendMode,
+    parentGroupId: src.parentGroupId,
   });
   const { frames } = useFrameStore.getState();
   const cellsByFrame = new Map<FrameId, Cell>();
@@ -302,6 +372,50 @@ export function mergeDown(activeLayerId: LayerId): void {
       getDeps(),
     ),
   );
+}
+
+// ── Group actions ──────────────────────────────────────────────────────────
+
+export function addGroup(name?: string): void {
+  const { layers, activeLayerId } = useLayerStore.getState();
+  const group = makeLayerGroup({ name: name ?? `Group ${layers.filter((l) => l.type === 'group').length + 1}` });
+  useHistoryStore
+    .getState()
+    .execute(new AddGroupCommand(group, layers.length, activeLayerId, getDeps()));
+}
+
+export function moveLayerToGroup(layerId: LayerId, groupId: LayerId): void {
+  const { layers } = useLayerStore.getState();
+  const layer = layers.find((l) => l.id === layerId);
+  if (!layer || layer.parentGroupId === groupId) return;
+  const prevGroupId = layer.parentGroupId;
+  useHistoryStore.getState().execute({
+    id: nanoid(12),
+    description: 'Move layer to group',
+    execute: () => { getDeps().patchLayer(layerId, { parentGroupId: groupId }); getDeps().notifyLayerListChanged(); },
+    undo:    () => { getDeps().patchLayer(layerId, { parentGroupId: prevGroupId }); getDeps().notifyLayerListChanged(); },
+  });
+}
+
+export function moveLayerOutOfGroup(layerId: LayerId): void {
+  const { layers } = useLayerStore.getState();
+  const layer = layers.find((l) => l.id === layerId);
+  if (!layer || layer.parentGroupId === null) return;
+  const prevGroupId = layer.parentGroupId;
+  useHistoryStore.getState().execute({
+    id: nanoid(12),
+    description: 'Remove layer from group',
+    execute: () => { getDeps().patchLayer(layerId, { parentGroupId: null }); getDeps().notifyLayerListChanged(); },
+    undo:    () => { getDeps().patchLayer(layerId, { parentGroupId: prevGroupId }); getDeps().notifyLayerListChanged(); },
+  });
+}
+
+export function toggleGroupCollapsed(groupId: LayerId): void {
+  const { layers } = useLayerStore.getState();
+  const group = layers.find((l) => l.id === groupId);
+  if (!group || group.type !== 'group') return;
+  const collapsed = !(group.collapsed ?? false);
+  getDeps().patchLayer(groupId, { collapsed });
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────

@@ -16,6 +16,8 @@ export interface FrameCommandDeps {
   setCell(frameId: FrameId, layerId: LayerId, cell: Cell): void;
   clearCell(frameId: FrameId, layerId: LayerId, canvasW: number, canvasH: number): void;
   notifyFrameChanged(): void;
+  setFrameLayerHidden(frameId: FrameId, layerId: LayerId, hidden: boolean): void;
+  setAllFramesLayerHidden(layerId: LayerId, hidden: boolean): void;
 }
 
 // ── Add ─────────────────────────────────────────────────────────────────────
@@ -215,6 +217,55 @@ export class SetFrameDurationCommand implements Command {
       return new SetFrameDurationCommand(this.frameId, this.before, other.after, this.deps);
     }
     return null;
+  }
+}
+
+// ── Per-frame layer visibility ───────────────────────────────────────────────
+
+export class SetFrameLayerVisibilityCommand implements Command {
+  readonly id = nanoid(12);
+  readonly description: string;
+
+  constructor(
+    private readonly frameId: FrameId,
+    private readonly layerId: LayerId,
+    private readonly hidden: boolean,
+    private readonly deps: FrameCommandDeps,
+  ) {
+    this.description = hidden ? 'Hide layer on frame' : 'Show layer on frame';
+  }
+
+  execute(): void {
+    this.deps.setFrameLayerHidden(this.frameId, this.layerId, this.hidden);
+    this.deps.notifyFrameChanged();
+  }
+
+  undo(): void {
+    this.deps.setFrameLayerHidden(this.frameId, this.layerId, !this.hidden);
+    this.deps.notifyFrameChanged();
+  }
+}
+
+export class SetFrameLayerVisibilityBatchCommand implements Command {
+  readonly id = nanoid(12);
+  readonly description: string;
+
+  constructor(
+    private readonly layerId: LayerId,
+    private readonly hidden: boolean,
+    private readonly deps: FrameCommandDeps,
+  ) {
+    this.description = hidden ? 'Hide layer on all frames' : 'Show layer on all frames';
+  }
+
+  execute(): void {
+    this.deps.setAllFramesLayerHidden(this.layerId, this.hidden);
+    this.deps.notifyFrameChanged();
+  }
+
+  undo(): void {
+    this.deps.setAllFramesLayerHidden(this.layerId, !this.hidden);
+    this.deps.notifyFrameChanged();
   }
 }
 

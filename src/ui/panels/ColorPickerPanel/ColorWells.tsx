@@ -8,6 +8,9 @@ import styles from './ColorWells.module.css';
 export function ColorWells(): JSX.Element {
   const primary = usePaletteStore((s) => s.primaryColor);
   const secondary = usePaletteStore((s) => s.secondaryColor);
+  const indexedMode = usePaletteStore((s) => s.indexedMode);
+  const swatches = usePaletteStore((s) => s.palette.swatches);
+  const primaryOutOfPalette = indexedMode && swatches.length > 0 && !swatches.some((s) => s.color === primary);
 
   return (
     <div className={styles.wells}>
@@ -24,13 +27,24 @@ export function ColorWells(): JSX.Element {
             }}
           />
         </Tooltip>
-        <Tooltip content="Primary color" placement="top">
+        <Tooltip
+          content={primaryOutOfPalette ? 'Primary color (not in palette — will snap on paint)' : 'Primary color'}
+          placement="top"
+        >
           <button
             type="button"
             className={`${styles.swatch} ${styles.primary}`}
             style={{ background: rgbaToHex(primary) }}
             aria-label={`Primary color ${rgbaToHex(primary)}`}
-          />
+          >
+            {primaryOutOfPalette && (
+              <span style={{
+                position: 'absolute', bottom: 1, right: 1,
+                fontSize: 8, lineHeight: 1, color: '#ffcc00',
+                pointerEvents: 'none', userSelect: 'none',
+              }}>⚠</span>
+            )}
+          </button>
         </Tooltip>
       </div>
       <div className={styles.controls}>

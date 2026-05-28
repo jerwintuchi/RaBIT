@@ -245,6 +245,89 @@ export class MergeDownCommand implements Command {
   }
 }
 
+// ── Group ──────────────────────────────────────────────────────────────────
+
+/** Adds a group layer (no pixel data). Undo removes it. */
+export class AddGroupCommand implements Command {
+  readonly id = nanoid(12);
+  readonly description: string;
+
+  constructor(
+    private readonly group: Layer,
+    private readonly insertAtIndex: number,
+    private readonly priorActiveLayerId: LayerId | null,
+    private readonly deps: LayerCommandDeps,
+  ) {
+    this.description = `Add group "${group.name}"`;
+  }
+
+  execute(): void {
+    this.deps.insertLayer(this.group, this.insertAtIndex);
+    this.deps.setActiveLayer(this.group.id);
+    this.deps.notifyLayerListChanged();
+  }
+
+  undo(): void {
+    this.deps.removeLayer(this.group.id);
+    this.deps.setActiveLayer(this.priorActiveLayerId);
+    this.deps.notifyLayerListChanged();
+  }
+}
+
+/**
+ * Removes a group layer and all its member layers in one undoable step.
+ * Members are captured with their cells by the action-composer before issuing.
+ */
+export class RemoveGroupWithMembersCommand implements Command {
+  readonly id = nanoid(12);
+  readonly description: string;
+
+  constructor(
+    private readonly group: Layer,
+    private readonly groupIndex: number,
+    /** Members sorted by ascending layer index — order is important for undo reinsertion. */
+    private readonly members: Array<{
+      layer: Layer;
+      index: number;
+      cellsByFrame: Map<FrameId, Cell>;
+    }>,
+    private readonly priorActiveLayerId: LayerId | null,
+    private readonly nextActiveLayerId: LayerId | null,
+    private readonly deps: LayerCommandDeps,
+  ) {
+    this.description = `Delete group "${group.name}"`;
+  }
+
+  execute(): void {
+    // Remove members in reverse index order so lower indices stay stable
+    for (const { layer, cellsByFrame } of [...this.members].reverse()) {
+      for (const frameId of cellsByFrame.keys()) {
+        this.deps.removeCell(frameId, layer.id);
+      }
+      this.deps.removeLayer(layer.id);
+      this.deps.invalidateLayerTexture(layer.id);
+    }
+    this.deps.removeLayer(this.group.id);
+    this.deps.setActiveLayer(this.nextActiveLayerId);
+    this.deps.notifyLayerListChanged();
+  }
+
+  undo(): void {
+    // Members are at lower array indices than the group (invariant).
+    // Re-insert members first in ascending index order so their insertions
+    // don't shift the group's slot, then restore the group.
+    for (const { layer, index, cellsByFrame } of this.members) {
+      this.deps.insertLayer(layer, index);
+      for (const [frameId, cell] of cellsByFrame) {
+        this.deps.setCell(frameId, layer.id, cell);
+      }
+    }
+    this.deps.insertLayer(this.group, this.groupIndex);
+    this.deps.setActiveLayer(this.priorActiveLayerId);
+    this.deps.notifyLayerListChanged();
+  }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /** Re-export for external callers building commands from the state layer. */

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { LuChevronDown, LuChevronRight, LuFolder } from 'react-icons/lu';
 import type { Layer } from '../../../state/dataModelTypes';
 import { layerActions } from '../../../state/action-composers';
 import { IconEye, IconEyeOff, IconLock } from '../../../assets/icons';
@@ -15,6 +16,7 @@ interface LayerRowProps {
   draggingDisplayIdx: number | null;
   dropDisplayIdx: number | null;
   dropOnTopHalf: boolean;
+  dropGroupId: string | null;
   onSelect: (e: React.MouseEvent) => void;
 }
 
@@ -26,12 +28,16 @@ export function LayerRow({
   draggingDisplayIdx,
   dropDisplayIdx,
   dropOnTopHalf,
+  dropGroupId,
   onSelect,
 }: LayerRowProps): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(layer.name);
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const isGroup = layer.type === 'group';
+  const isChild = layer.parentGroupId !== null;
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -67,34 +73,62 @@ export function LayerRow({
 
   const closeCtxMenu = useCallback(() => setCtxMenu(null), []);
 
-  const ctxItems: ContextMenuItem[] = useMemo(() => [
-    {
+  const ctxItems: ContextMenuItem[] = useMemo(() => {
+    const base: ContextMenuItem[] = [
+      {
+        type: 'item',
+        label: 'Rename',
+        onClick: () => { setCtxMenu(null); startRename(); },
+      },
+    ];
+
+    if (isGroup) {
+      base.push({
+        type: 'item',
+        label: 'Add layer to group',
+        onClick: () => { setCtxMenu(null); layerActions.addLayer(undefined, layer.id); },
+      });
+    } else {
+      base.push(
+        {
+          type: 'item',
+          label: 'Duplicate layer',
+          onClick: () => { setCtxMenu(null); layerActions.duplicateLayer(layer.id); },
+        },
+        {
+          type: 'item',
+          label: 'Merge down',
+          onClick: () => { setCtxMenu(null); layerActions.mergeDown(layer.id); },
+        },
+      );
+    }
+
+    if (isChild) {
+      base.push({
+        type: 'item',
+        label: 'Remove from group',
+        onClick: () => { setCtxMenu(null); layerActions.moveLayerOutOfGroup(layer.id); },
+      });
+    }
+
+    base.push({ type: 'separator' });
+    base.push({
       type: 'item',
-      label: 'Rename',
-      onClick: () => { setCtxMenu(null); startRename(); },
-    },
-    {
-      type: 'item',
-      label: 'Duplicate layer',
-      onClick: () => { setCtxMenu(null); layerActions.duplicateLayer(layer.id); },
-    },
-    {
-      type: 'item',
-      label: 'Merge down',
-      onClick: () => { setCtxMenu(null); layerActions.mergeDown(layer.id); },
-    },
-    { type: 'separator' },
-    {
-      type: 'item',
-      label: 'Delete layer',
+      label: isGroup ? 'Delete group' : 'Delete layer',
       danger: true,
       onClick: () => { setCtxMenu(null); layerActions.removeLayer(layer.id); },
-    },
-  ], [startRename, layer.id]);
+    });
+
+    return base;
+  }, [startRename, layer.id, isGroup, isChild]);
 
   const isDraggingThis = draggingDisplayIdx === displayIdx;
   const showTopIndicator = dropDisplayIdx === displayIdx && dropOnTopHalf;
   const showBottomIndicator = dropDisplayIdx === displayIdx && !dropOnTopHalf;
+  // Group highlight: shown on the group row that will receive the dragged layer
+  const isGroupDropTarget = isGroup && layer.id === dropGroupId;
+  // Drop line indent: shown when the insertion point is inside any group
+  const dropLineIndented = dropGroupId !== null && (showTopIndicator || showBottomIndicator);
 
   return (
     <div
@@ -105,6 +139,9 @@ export function LayerRow({
         isDraggingThis ? styles.dragging : '',
         showTopIndicator ? styles.dropTop : '',
         showBottomIndicator ? styles.dropBottom : '',
+        isChild ? styles.childLayer : '',
+        isGroupDropTarget ? styles.groupDropTarget : '',
+        dropLineIndented ? styles.dropLineIndented : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -117,18 +154,32 @@ export function LayerRow({
         setCtxMenu({ x: e.clientX, y: e.clientY });
       }}
     >
-      <button
-        type="button"
-        className={styles.iconButton}
-        aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
-        aria-pressed={!layer.visible}
-        onClick={(e) => {
-          e.stopPropagation();
-          layerActions.setLayerVisibility(layer.id, !layer.visible);
-        }}
-      >
-        {layer.visible ? <IconEye /> : <IconEyeOff />}
-      </button>
+      {isGroup ? (
+        <button
+          type="button"
+          className={styles.iconButton}
+          aria-label={layer.collapsed ? 'Expand group' : 'Collapse group'}
+          onClick={(e) => {
+            e.stopPropagation();
+            layerActions.toggleGroupCollapsed(layer.id);
+          }}
+        >
+          {layer.collapsed ? <LuChevronRight size={14} /> : <LuChevronDown size={14} />}
+        </button>
+      ) : (
+        <button
+          type="button"
+          className={styles.iconButton}
+          aria-label={layer.visible ? 'Hide layer' : 'Show layer'}
+          aria-pressed={!layer.visible}
+          onClick={(e) => {
+            e.stopPropagation();
+            layerActions.setLayerVisibility(layer.id, !layer.visible);
+          }}
+        >
+          {layer.visible ? <IconEye /> : <IconEyeOff />}
+        </button>
+      )}
       <button
         type="button"
         className={`${styles.iconButton} ${layer.locked ? styles.locked : ''}`}
@@ -141,7 +192,13 @@ export function LayerRow({
       >
         <IconLock />
       </button>
-      <LayerThumbnail layerId={layer.id} />
+      {isGroup ? (
+        <span className={styles.groupIcon}>
+          <LuFolder size={14} />
+        </span>
+      ) : (
+        <LayerThumbnail layerId={layer.id} />
+      )}
       {editing ? (
         <input
           ref={inputRef}

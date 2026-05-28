@@ -27,6 +27,13 @@ pub struct LayerDto {
     pub locked: bool,
     pub opacity: f64,
     pub blend_mode: String,
+    // M16A additions — optional for backward compat with old .rabit files
+    #[serde(default)]
+    pub layer_type: Option<String>,
+    #[serde(default)]
+    pub parent_group_id: Option<String>,
+    #[serde(default)]
+    pub collapsed: Option<bool>,
 }
 
 /// Cell pixel data is `Vec<u8>` (raw RGBA bytes).
@@ -46,6 +53,8 @@ pub struct FrameDto {
     pub id: String,
     pub duration: u32,
     pub cells: HashMap<String, CellDto>,
+    #[serde(default)]
+    pub hidden_layer_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

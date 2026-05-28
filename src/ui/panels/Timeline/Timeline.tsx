@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import {
   LuPlay, LuPause, LuSkipBack, LuSkipForward,
   LuChevronLeft, LuChevronRight, LuPlus, LuLink, LuX, LuCopy,
+  LuChevronDown, LuFolder,
 } from 'react-icons/lu';
 import { useFrameStore } from '../../../state/useFrameStore';
 import { useLayerStore } from '../../../state/useLayerStore';
@@ -64,14 +65,16 @@ function ThumbCell({ frameIndex, layerId }: { frameIndex: number; layerId: strin
 }
 
 function FrameCell({
-  frameIndex, layerId, isActive, isSelected, isDragSource,
+  frameIndex, layerId, isActive, isSelected, isDragSource, onContextMenu,
 }: {
   frameIndex: number; layerId: string; isActive: boolean;
   isSelected: boolean; isDragSource: boolean;
+  onContextMenu: (e: React.MouseEvent, frameId: string, layerId: string) => void;
 }): JSX.Element {
   const frames = useFrameStore((s) => s.frames);
   const frame = frames[frameIndex];
   const cell = frame?.cells[layerId];
+  const isHidden = frame?.hiddenLayerIds?.includes(layerId) ?? false;
 
   const cls = [
     styles.frameCell,
@@ -80,25 +83,33 @@ function FrameCell({
     isDragSource ? styles.draggingCol : '',
   ].filter(Boolean).join(' ');
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (frame) onContextMenu(e, frame.id, layerId);
+  };
+
   if (!frame) return <div className={cls} />;
   if (cell?.linked) {
     return (
-      <div className={cls} title="Linked cell">
+      <div className={cls} title="Linked cell" onContextMenu={handleContextMenu}>
         <LuLink size={10} className={styles.frameCellLinked} />
+        {isHidden && <div className={styles.frameCellHidden} />}
       </div>
     );
   }
   const hasContent = cell?.data && cell.data.some((b) => b !== 0);
   if (!hasContent) {
     return (
-      <div className={cls} title="Empty cell">
+      <div className={cls} title="Empty cell" onContextMenu={handleContextMenu}>
         <div className={styles.frameCellEmpty} />
+        {isHidden && <div className={styles.frameCellHidden} />}
       </div>
     );
   }
   return (
-    <div className={cls} title={`Frame ${frameIndex + 1}`}>
+    <div className={cls} title={`Frame ${frameIndex + 1}`} onContextMenu={handleContextMenu}>
       <ThumbCell frameIndex={frameIndex} layerId={layerId} />
+      {isHidden && <div className={styles.frameCellHidden} />}
     </div>
   );
 }
@@ -377,12 +388,24 @@ export function Timeline(): JSX.Element {
     });
   };
 
-  const displayLayers = useMemo(() => [...layers].reverse(), [layers]);
+  const displayLayers = useMemo(() => {
+    const collapsedGroupIds = new Set(
+      layers.filter((l) => l.type === 'group' && l.collapsed).map((l) => l.id),
+    );
+    return [...layers]
+      .reverse()
+      .filter((l) => !l.parentGroupId || !collapsedGroupIds.has(l.parentGroupId));
+  }, [layers]);
 
   // ── Layer rename in timeline ────────────────────────────────────────────────
   const [renamingLayerId, setRenamingLayerId] = useState<string | null>(null);
   const [renamingLayerName, setRenamingLayerName] = useState('');
   const [layerCtxMenu, setLayerCtxMenu] = useState<{ layerId: string; anchor: { x: number; y: number } } | null>(null);
+  const [frameCellCtxMenu, setFrameCellCtxMenu] = useState<{ frameId: string; layerId: string; anchor: { x: number; y: number } } | null>(null);
+
+  const handleFrameCellContextMenu = useCallback((e: React.MouseEvent, frameId: string, lid: string) => {
+    setFrameCellCtxMenu({ frameId, layerId: lid, anchor: { x: e.clientX, y: e.clientY } });
+  }, []);
   const layerRenameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -541,12 +564,16 @@ export function Timeline(): JSX.Element {
           <div className={styles.tagRowSpacer} />
           <div className={styles.layerLabelsHeader}><span>Layer</span></div>
           <div ref={layerLabelsListRef} className={styles.layerLabelsList} onScroll={onLayerLabelsScroll}>
-            {displayLayers.map((layer) => (
+            {displayLayers.map((layer) => {
+              const isGroup = layer.type === 'group';
+              const isChild = !!layer.parentGroupId;
+              return (
               <div
                 key={layer.id}
                 className={[
                   styles.layerLabelRow,
                   layer.id === activeLayerId ? styles.activeLayer : '',
+                  isChild ? styles.childLayerLabel : '',
                 ].filter(Boolean).join(' ')}
                 onClick={() => useLayerStore.getState().setActiveLayer(layer.id)}
                 onContextMenu={(e) => {
@@ -556,15 +583,27 @@ export function Timeline(): JSX.Element {
                 }}
                 title={`${layer.name} — click to select, right-click for options`}
               >
-                <button
-                  type="button"
-                  className={[styles.layerLockBtn, layer.locked ? styles.locked : ''].filter(Boolean).join(' ')}
-                  aria-label={layer.locked ? 'Unlock layer' : 'Lock layer'}
-                  aria-pressed={layer.locked}
-                  onClick={(e) => { e.stopPropagation(); layerActions.setLayerLocked(layer.id, !layer.locked); }}
-                >
-                  <IconLock />
-                </button>
+                {isGroup ? (
+                  <button
+                    type="button"
+                    className={styles.layerLockBtn}
+                    aria-label={layer.collapsed ? 'Expand group' : 'Collapse group'}
+                    onClick={(e) => { e.stopPropagation(); layerActions.toggleGroupCollapsed(layer.id); }}
+                  >
+                    {layer.collapsed ? <LuChevronRight size={12} /> : <LuChevronDown size={12} />}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={[styles.layerLockBtn, layer.locked ? styles.locked : ''].filter(Boolean).join(' ')}
+                    aria-label={layer.locked ? 'Unlock layer' : 'Lock layer'}
+                    aria-pressed={layer.locked}
+                    onClick={(e) => { e.stopPropagation(); layerActions.setLayerLocked(layer.id, !layer.locked); }}
+                  >
+                    <IconLock />
+                  </button>
+                )}
+                {isGroup && <LuFolder size={12} className={styles.groupFolderIcon} />}
                 {renamingLayerId === layer.id ? (
                   <input
                     ref={layerRenameInputRef}
@@ -583,7 +622,8 @@ export function Timeline(): JSX.Element {
                   <span className={styles.layerName}>{layer.name}</span>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -751,6 +791,7 @@ export function Timeline(): JSX.Element {
                       isActive={fi === activeFrameIndex}
                       isSelected={selectedFrameIndices.has(fi)}
                       isDragSource={dragVisual?.sourceIndices.includes(fi) ?? false}
+                      onContextMenu={handleFrameCellContextMenu}
                     />
                   ))}
                   {/* Spacer matching the add-frame cell so row widths stay aligned */}
@@ -766,30 +807,40 @@ export function Timeline(): JSX.Element {
       {/* Layer context menu (from timeline label column) */}
       {layerCtxMenu && (() => {
         const lid = layerCtxMenu.layerId;
+        const ctxLayer = useLayerStore.getState().layers.find((l) => l.id === lid);
+        const isGroupCtx = ctxLayer?.type === 'group';
+        const isChildCtx = !!ctxLayer?.parentGroupId;
         const items: ContextMenuItem[] = [
           {
             type: 'item',
             label: 'Rename',
             onClick: () => {
-              const layer = useLayerStore.getState().layers.find((l) => l.id === lid);
-              if (layer) { setRenamingLayerName(layer.name); setRenamingLayerId(lid); }
+              if (ctxLayer) { setRenamingLayerName(ctxLayer.name); setRenamingLayerId(lid); }
               setLayerCtxMenu(null);
             },
           },
-          {
-            type: 'item',
+          ...(isGroupCtx ? [{
+            type: 'item' as const,
+            label: 'Add layer to group',
+            onClick: () => { layerActions.addLayer(undefined, lid); setLayerCtxMenu(null); },
+          }] : [{
+            type: 'item' as const,
             label: 'Duplicate layer',
             onClick: () => { layerActions.duplicateLayer(lid); setLayerCtxMenu(null); },
-          },
-          {
-            type: 'item',
+          }, {
+            type: 'item' as const,
             label: 'Merge down',
             onClick: () => { layerActions.mergeDown(lid); setLayerCtxMenu(null); },
-          },
-          { type: 'separator' },
+          }]),
+          ...(isChildCtx ? [{
+            type: 'item' as const,
+            label: 'Remove from group',
+            onClick: () => { layerActions.moveLayerOutOfGroup(lid); setLayerCtxMenu(null); },
+          }] : []),
+          { type: 'separator' as const },
           {
-            type: 'item',
-            label: 'Delete layer',
+            type: 'item' as const,
+            label: isGroupCtx ? 'Delete group' : 'Delete layer',
             danger: true,
             onClick: () => { layerActions.removeLayer(lid); setLayerCtxMenu(null); },
           },
@@ -799,6 +850,38 @@ export function Timeline(): JSX.Element {
             items={items}
             anchor={layerCtxMenu.anchor}
             onClose={() => setLayerCtxMenu(null)}
+          />
+        );
+      })()}
+
+      {/* Frame cell context menu (per-frame layer visibility) */}
+      {frameCellCtxMenu && (() => {
+        const { frameId, layerId: lid, anchor } = frameCellCtxMenu;
+        const frame = frames.find((f) => f.id === frameId);
+        const isHidden = frame?.hiddenLayerIds?.includes(lid) ?? false;
+        const items: ContextMenuItem[] = [
+          {
+            type: 'item',
+            label: isHidden ? 'Show layer on this frame' : 'Hide layer on this frame',
+            onClick: () => { frameActions.setFrameLayerHidden(frameId, lid, !isHidden); setFrameCellCtxMenu(null); },
+          },
+          { type: 'separator' },
+          {
+            type: 'item',
+            label: 'Hide on all frames',
+            onClick: () => { frameActions.setFrameLayerHiddenAll(lid, true); setFrameCellCtxMenu(null); },
+          },
+          {
+            type: 'item',
+            label: 'Show on all frames',
+            onClick: () => { frameActions.setFrameLayerHiddenAll(lid, false); setFrameCellCtxMenu(null); },
+          },
+        ];
+        return (
+          <ContextMenu
+            items={items}
+            anchor={anchor}
+            onClose={() => setFrameCellCtxMenu(null)}
           />
         );
       })()}

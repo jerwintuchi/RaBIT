@@ -105,3 +105,33 @@
   font-size: var(--text-sm);
   outline: none;
 }
+
+/* Group member indentation */
+.childLayer {
+  padding-left: calc(var(--space-2) + 16px);
+}
+
+/* Group row highlighted as drop target during drag */
+.groupDropTarget {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: -1px;
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+/* Indent the drop-line when the insertion will be inside a group */
+.dropLineIndented.dropTop::before,
+.dropLineIndented.dropBottom::after {
+  left: calc(var(--space-2) + 16px);
+}
+
+/* Folder icon placeholder (same size as LayerThumbnail) */
+.groupIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}

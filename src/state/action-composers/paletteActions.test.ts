@@ -24,7 +24,7 @@ function setupStores(paintFn?: (buf: Uint8ClampedArray) => void): Uint8ClampedAr
   if (paintFn) paintFn(buf);
 
   useLayerStore.setState({
-    layers: [{ id: layerId, name: 'Layer 1', visible: true, locked: false, opacity: 1, blendMode: 'normal' }],
+    layers: [{ id: layerId, name: 'Layer 1', type: 'layer' as const, parentGroupId: null, visible: true, locked: false, opacity: 1, blendMode: 'normal' as const }],
     activeLayerId: layerId,
     dataVersions: { [layerId]: 0 },
   });
@@ -34,6 +34,7 @@ function setupStores(paintFn?: (buf: Uint8ClampedArray) => void): Uint8ClampedAr
       id: 'frame1',
       duration: 100,
       cells: { [layerId]: { linked: false, data: buf } },
+      hiddenLayerIds: [],
     }],
     activeFrameIndex: 0,
     tags: [],

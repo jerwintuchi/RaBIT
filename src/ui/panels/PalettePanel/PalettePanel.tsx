@@ -19,6 +19,7 @@ interface MenuState {
 
 export function PalettePanel(): JSX.Element {
   const swatches = usePaletteStore((s) => s.palette.swatches);
+  const indexedMode = usePaletteStore((s) => s.indexedMode);
 
   const [size, setSize] = useState<SwatchSize>('M');
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -174,6 +175,17 @@ export function PalettePanel(): JSX.Element {
               onClick={() => fileInputRef.current?.click()}
             >
               <IconUpload />
+            </button>
+          </Tooltip>
+          <Tooltip content="Indexed color mode — paint snaps to nearest swatch" placement="left">
+            <button
+              type="button"
+              className={`${styles.headerButton} ${indexedMode ? styles.headerButtonActive : ''}`}
+              aria-label="Indexed color mode"
+              aria-pressed={indexedMode}
+              onClick={() => usePaletteStore.getState().setIndexedMode(!indexedMode)}
+            >
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '-0.5px' }}>IDX</span>
             </button>
           </Tooltip>
           <Tooltip content="Add swatch from primary color" placement="left">

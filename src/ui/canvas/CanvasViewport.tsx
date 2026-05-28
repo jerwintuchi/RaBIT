@@ -29,12 +29,18 @@ import styles from './CanvasViewport.module.css';
 export function CanvasViewport(): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const glCanvasRef = useRef<HTMLCanvasElement>(null);
+  const brushCursorCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const { canvas } = useProjectStore();
   const { layers, activeLayerId } = useLayerStore();
   const { frames, activeFrameIndex } = useFrameStore();
   const { zoomLevel, panOffset, showGrid, showCheckerboard, cursorPosition, onionSkin } = useUIStore();
   const activeTool = useToolStore((s) => s.activeTool);
+  const pixelPerfect = useToolStore((s) => s.options.pencil.pixelPerfect);
+  const pencilSize  = useToolStore((s) => s.options.pencil.size);
+  const pencilShape = useToolStore((s) => s.options.pencil.brushShape);
+  const eraserSize  = useToolStore((s) => s.options.eraser.size);
+  const eraserShape = useToolStore((s) => s.options.eraser.brushShape);
   const selection = useToolStore((s) => s.selection);
   const selectionDragOffset = useToolStore((s) => s.selectionDragOffset);
   const lassoPreviewPath = useToolStore((s) => s.lassoPreviewPath);
@@ -71,6 +77,8 @@ export function CanvasViewport(): JSX.Element {
       const h = Math.round(entry.contentRect.height);
       glCanvas.width = w;
       glCanvas.height = h;
+      const brushCvs = brushCursorCanvasRef.current;
+      if (brushCvs) { brushCvs.width = w; brushCvs.height = h; }
       getEngine()?.resize(w, h);
     });
     observer.observe(container);
@@ -83,17 +91,20 @@ export function CanvasViewport(): JSX.Element {
     getEngine()?.markDirty(DirtyFlag.FULL);
   }, [canvas.width, canvas.height]);
 
-  // Push layer specs
+  // Push layer specs — re-evaluate when layers change OR when per-frame visibility changes
   useEffect(() => {
+    const frameHidden = new Set(frames[activeFrameIndex]?.hiddenLayerIds ?? []);
     const specs: RenderLayerSpec[] = layers.map((l) => ({
       id: l.id,
-      visible: l.visible,
+      visible: l.visible && !frameHidden.has(l.id),
       opacity: l.opacity,
       blendMode: l.blendMode,
+      isGroup: l.type === 'group',
+      parentGroupId: l.parentGroupId,
     }));
     getEngine()?.setLayers(specs);
     getEngine()?.markDirty(DirtyFlag.LAYER_ORDER);
-  }, [layers]);
+  }, [layers, frames, activeFrameIndex]);
 
   // Push pixel data
   useEffect(() => {
@@ -213,6 +224,23 @@ export function CanvasViewport(): JSX.Element {
         drawActions.fillSelection();
         return;
       }
+      // [ / ] — step brush size down / up (pencil or eraser)
+      if ((ev.key === '[' || ev.key === ']') && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+        const { activeTool: at, options } = useToolStore.getState();
+        if (at === 'pencil' || at === 'eraser') {
+          const ALL_SIZES = [1, 2, 3, 5, 7, 9, 13, 16];
+          const toolOpts = at === 'eraser' ? options.eraser : options.pencil;
+          const validSizes = toolOpts.brushShape === 'round'
+            ? ALL_SIZES.filter((s) => s > 2)
+            : ALL_SIZES;
+          const cur = toolOpts.size;
+          const idx = validSizes.indexOf(cur);
+          const nextIdx = ev.key === '[' ? Math.max(0, (idx === -1 ? 0 : idx) - 1)
+                                          : Math.min(validSizes.length - 1, (idx === -1 ? 0 : idx) + 1);
+          useToolStore.getState().updateOptions(at, { size: validSizes[nextIdx]! });
+          return;
+        }
+      }
       if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
       const tool = TOOL_KEYS[ev.key.toLowerCase()];
       if (tool) {
@@ -256,6 +284,45 @@ export function CanvasViewport(): JSX.Element {
       containerRef.current.style.cursor = cursor;
     }
   }, [activeTool, activeLayerLocked, selection, selectionDragOffset, cursorPosition]);
+
+  // Brush cursor overlay — draws multi-pixel footprint outline when brush size > 1
+  const isBrushTool = activeTool === 'pencil' || activeTool === 'eraser';
+  const activeBrushSize  = activeTool === 'eraser' ? eraserSize  : pencilSize;
+  const activeBrushShape = activeTool === 'eraser' ? eraserShape : pencilShape;
+  const effectiveBrushSize = (activeTool === 'pencil' && pixelPerfect) ? 1 : activeBrushSize;
+  const showBrushCursor = isBrushTool && cursorPosition != null;
+
+  useEffect(() => {
+    const cvs = brushCursorCanvasRef.current;
+    if (!cvs) return;
+    const ctx2d = cvs.getContext('2d');
+    if (!ctx2d) return;
+    ctx2d.clearRect(0, 0, cvs.width, cvs.height);
+    if (!showBrushCursor || !cursorPosition) return;
+
+    const lo = Math.floor((effectiveBrushSize - 1) / 2);
+    const cx = (cursorPosition.x - lo) * zoomLevel + panOffset.x;
+    const cy = (cursorPosition.y - lo) * zoomLevel + panOffset.y;
+    const sz = Math.max(effectiveBrushSize, 1) * zoomLevel;
+
+    const drawOutline = (inset: number, color: string) => {
+      ctx2d.strokeStyle = color;
+      ctx2d.lineWidth = 1;
+      if (activeBrushShape === 'round') {
+        const rx = cx + sz / 2;
+        const ry = cy + sz / 2;
+        const radius = sz / 2 - inset;
+        ctx2d.beginPath();
+        ctx2d.arc(rx, ry, Math.max(1, radius), 0, Math.PI * 2);
+        ctx2d.stroke();
+      } else {
+        ctx2d.strokeRect(cx - inset, cy - inset, sz + inset * 2, sz + inset * 2);
+      }
+    };
+
+    drawOutline(1, 'rgba(0,0,0,0.7)');
+    drawOutline(-1, 'rgba(255,255,255,0.9)');
+  }, [showBrushCursor, cursorPosition, effectiveBrushSize, activeBrushShape, zoomLevel, panOffset.x, panOffset.y]);
 
   // Tool pointer event routing — runs in addition to useViewportInteraction's pan handlers
   useEffect(() => {
@@ -346,7 +413,7 @@ export function CanvasViewport(): JSX.Element {
     'pencil', 'eraser', 'line', 'rectangle', 'ellipse', 'fill', 'eyedropper', 'magic-wand',
   ]);
   // move and marquee get the icon overlay but not the pixel-box crosshair
-  const showCrosshair = CROSSHAIR_TOOLS.has(activeTool) && cursorPosition != null;
+  const showCrosshair = CROSSHAIR_TOOLS.has(activeTool) && cursorPosition != null && !showBrushCursor;
   const showIconOnly  = (activeTool === 'move' || activeTool === 'marquee') && cursorPosition != null;
 
   // Small tool icon rendered next to the crosshair so the active tool is
@@ -394,6 +461,7 @@ export function CanvasViewport(): JSX.Element {
       }}
     >
       <canvas ref={glCanvasRef} className={styles.glCanvas} />
+      <canvas ref={brushCursorCanvasRef} className={styles.brushCursorCanvas} aria-hidden="true" />
       {layers.length === 0 && <CanvasEmptyState />}
       {(showCrosshair || showIconOnly) && cursorPosition != null && (
         <>

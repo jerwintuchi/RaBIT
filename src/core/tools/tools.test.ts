@@ -99,6 +99,8 @@ function makeCtx(w: number, h: number, buf?: Uint8ClampedArray): TestCtx {
     computeSelectionRust: async () => null,
     getMirrorMode: () => ({ h: false, v: false }),
     setLassoPreviewPath: () => {},
+    getBrushOptions: () => ({ size: 1, shape: 'square' as const }),
+    snapColorIfIndexed: (c: number) => c,
   };
 
   return { ctx, layerBuf, commands, state };

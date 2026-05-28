@@ -24,6 +24,10 @@ export interface LayerDto {
   locked: boolean;
   opacity: number;
   blendMode: string;
+  // M16A additions — optional for backward compat with old .rabit files
+  layerType?: string | null;
+  parentGroupId?: string | null;
+  collapsed?: boolean | null;
 }
 
 /** Cell pixel data arrives as number[] (raw RGBA bytes, JSON-encoded Vec<u8>).
@@ -37,6 +41,8 @@ export interface FrameDto {
   id: string;
   duration: number;
   cells: Record<string, CellDto>;
+  // M16B addition — optional for backward compat with old .rabit files
+  hiddenLayerIds?: string[] | null;
 }
 
 export interface SwatchDto {

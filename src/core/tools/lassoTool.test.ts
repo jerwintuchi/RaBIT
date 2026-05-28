@@ -47,6 +47,8 @@ function makeCtx(w: number, h: number) {
     computeSelectionRust: async () => null,
     getMirrorMode: () => ({ h: false, v: false }),
     setLassoPreviewPath: () => {},
+    getBrushOptions: () => ({ size: 1, shape: 'square' as const }),
+    snapColorIfIndexed: (c: number) => c,
   };
 
   return { ctx, state, commands };

@@ -10,6 +10,8 @@ import {
   BatchInsertFramesCommand,
   SetFrameDurationCommand,
   ClearCellCommand,
+  SetFrameLayerVisibilityCommand,
+  SetFrameLayerVisibilityBatchCommand,
   type FrameCommandDeps,
 } from '../../core/commands/FrameCommands';
 import { useFrameStore } from '../useFrameStore';
@@ -74,6 +76,12 @@ function getDeps(): FrameCommandDeps {
         if (data) engine.uploadLayerData(layer.id, data);
       }
       engine.markDirty(DirtyFlag.LAYER_DATA | DirtyFlag.FULL);
+    },
+    setFrameLayerHidden(frameId, layerId, hidden) {
+      useFrameStore.getState().setFrameLayerHidden(frameId, layerId, hidden);
+    },
+    setAllFramesLayerHidden(layerId, hidden) {
+      useFrameStore.getState().setAllFramesLayerHidden(layerId, hidden);
     },
   };
   return _deps;
@@ -219,6 +227,18 @@ export function removeFrameAtIndex(frameIndex: number): void {
       ? activeFrameIndex - 1
       : Math.min(activeFrameIndex, frames.length - 2);
   const cmd = new RemoveFrameCommand(frame, frameIndex, activeFrameIndex, newActive, getDeps());
+  useHistoryStore.getState().execute(cmd);
+}
+
+/** Toggle a layer's visibility on a specific frame only. */
+export function setFrameLayerHidden(frameId: FrameId, layerId: LayerId, hidden: boolean): void {
+  const cmd = new SetFrameLayerVisibilityCommand(frameId, layerId, hidden, getDeps());
+  useHistoryStore.getState().execute(cmd);
+}
+
+/** Toggle a layer's visibility on every frame at once (single undo step). */
+export function setFrameLayerHiddenAll(layerId: LayerId, hidden: boolean): void {
+  const cmd = new SetFrameLayerVisibilityBatchCommand(layerId, hidden, getDeps());
   useHistoryStore.getState().execute(cmd);
 }
 

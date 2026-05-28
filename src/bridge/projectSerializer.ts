@@ -3,6 +3,7 @@ import type { CellDto, ProjectDto } from './projectIpc';
 // Local type aliases so this bridge file does not import from core.
 // These must stay in sync with src/core/DataModel/types.ts.
 type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay' | 'add' | 'subtract';
+type LayerType = 'layer' | 'group';
 type LoopDirection = 'forward' | 'reverse' | 'ping-pong';
 interface Cell { linked: boolean; data: Uint8ClampedArray | null; }
 interface Project {
@@ -14,8 +15,8 @@ interface Project {
   modifiedAt: number;
   application: string;
   canvas: { width: number; height: number; colorMode: 'rgba'; backgroundColor: number; dpi: number };
-  layers: Array<{ id: string; name: string; visible: boolean; locked: boolean; opacity: number; blendMode: BlendMode }>;
-  frames: Array<{ id: string; duration: number; cells: Record<string, Cell> }>;
+  layers: Array<{ id: string; name: string; type: LayerType; parentGroupId: string | null; visible: boolean; locked: boolean; opacity: number; blendMode: BlendMode; collapsed?: boolean }>;
+  frames: Array<{ id: string; duration: number; cells: Record<string, Cell>; hiddenLayerIds: string[] }>;
   palette: { id: string; name: string; swatches: Array<{ color: number; name: string | null }> };
   tags: Array<{ id: string; name: string; from: number; to: number; loopDirection: LoopDirection; color: number }>;
   activeLayerId: string | null;
@@ -53,10 +54,14 @@ export function projectToDto(project: Project): ProjectDto {
       locked: l.locked,
       opacity: l.opacity,
       blendMode: l.blendMode,
+      layerType: l.type,
+      parentGroupId: l.parentGroupId ?? null,
+      collapsed: l.collapsed ?? null,
     })),
     frames: project.frames.map((f) => ({
       id: f.id,
       duration: f.duration,
+      hiddenLayerIds: f.hiddenLayerIds,
       cells: Object.fromEntries(
         Object.entries(f.cells).map(([layerId, cell]) => [
           layerId,
@@ -111,6 +116,9 @@ export function dtoToProject(dto: ProjectDto): Project {
     layers: dto.layers.map((l) => ({
       id: l.id,
       name: l.name,
+      type: (l.layerType as LayerType | null | undefined) ?? 'layer',
+      parentGroupId: l.parentGroupId ?? null,
+      ...(l.collapsed != null ? { collapsed: l.collapsed } : {}),
       visible: l.visible,
       locked: l.locked,
       opacity: l.opacity,
@@ -119,6 +127,7 @@ export function dtoToProject(dto: ProjectDto): Project {
     frames: dto.frames.map((f) => ({
       id: f.id,
       duration: f.duration,
+      hiddenLayerIds: f.hiddenLayerIds ?? [],
       cells: Object.fromEntries(
         Object.entries(f.cells).map(([layerId, cellDto]) => [
           layerId,

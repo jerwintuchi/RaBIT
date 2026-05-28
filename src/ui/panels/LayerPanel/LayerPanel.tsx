@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useRef } from 'react';
-import { LuMerge, LuCopy } from 'react-icons/lu';
+import { LuMerge, LuCopy, LuFolderPlus } from 'react-icons/lu';
 import type { BlendMode } from '../../../state/dataModelTypes';
 import { useLayerStore } from '../../../state/useLayerStore';
 import { layerActions } from '../../../state/action-composers';
@@ -25,8 +25,16 @@ export function LayerPanel(): JSX.Element {
     [layers, activeLayerId],
   );
 
-  // Display order is reverse of array order — top of UI = top of stack = end of array
-  const displayLayers = useMemo(() => [...layers].reverse(), [layers]);
+  // Display order is reverse of array order — top of UI = top of stack = end of array.
+  // Collapsed groups hide their children from the panel.
+  const displayLayers = useMemo(() => {
+    const collapsedGroupIds = new Set(
+      layers.filter((l) => l.type === 'group' && l.collapsed).map((l) => l.id),
+    );
+    return [...layers]
+      .reverse()
+      .filter((l) => !l.parentGroupId || !collapsedGroupIds.has(l.parentGroupId));
+  }, [layers]);
 
   // Multi-select: set of layer IDs that are highlighted (beyond activeLayerId)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -67,6 +75,7 @@ export function LayerPanel(): JSX.Element {
   // ── Pointer-based drag-to-reorder ────────────────────────────────────────────
   const [dragSrc, setDragSrc] = useState<number | null>(null);
   const [dropInfo, setDropInfo] = useState<{ idx: number; topHalf: boolean } | null>(null);
+  const [dropGroupId, setDropGroupId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const dropInfoRef = useRef<{ idx: number; topHalf: boolean } | null>(null);
   const justDraggedRef = useRef(false);
@@ -100,6 +109,29 @@ export function LayerPanel(): JSX.Element {
     dragStateRef.current = { active: true, pointerId: e.pointerId, srcDisplayIdx: srcIdx, startY: e.clientY, isDragging: false };
   };
 
+  // Returns the group id the dragged layer (at srcIdx) would join if dropped at info.
+  // A group is only entered when the cursor is explicitly over the BOTTOM HALF of the
+  // group row itself. Hovering over the top-half of the first child below a group
+  // produces the same logical slot but is treated as a sibling drop, not a group entry.
+  const resolveDropGroup = (srcIdx: number, info: { idx: number; topHalf: boolean }): string | null => {
+    let slot = info.topHalf ? info.idx : info.idx + 1;
+    if (slot > srcIdx) slot -= 1;
+    const newOrder = [...displayLayers];
+    const [dragged] = newOrder.splice(srcIdx, 1);
+    if (!dragged) return null;
+    newOrder.splice(slot, 0, dragged);
+    const above = slot > 0 ? newOrder[slot - 1] : null;
+    if (above?.type === 'group') {
+      // Require the cursor to be on the bottom half of the group row to count as intentional.
+      // Top-half of the row just below the group maps to the same slot but is not intentional.
+      const hoverLayer = displayLayers[info.idx];
+      if (!info.topHalf && hoverLayer?.type === 'group') return above.id;
+      return null;
+    }
+    if (above?.parentGroupId) return above.parentGroupId;
+    return null;
+  };
+
   const onListPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const ds = dragStateRef.current;
     if (!ds.active || ds.pointerId !== e.pointerId) return;
@@ -112,6 +144,7 @@ export function LayerPanel(): JSX.Element {
     const info = resolveDropInfo(e.clientY);
     dropInfoRef.current = info;
     setDropInfo(info);
+    setDropGroupId(info ? resolveDropGroup(ds.srcDisplayIdx, info) : null);
   };
 
   const onListPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -126,6 +159,16 @@ export function LayerPanel(): JSX.Element {
         if (slot !== src) {
           layerActions.reorderLayer(layers.length - 1 - src, layers.length - 1 - slot);
         }
+        // Update group membership using the same intent-aware logic as the visual preview.
+        const draggedLayer = displayLayers[src];
+        if (draggedLayer) {
+          const targetGroupId = resolveDropGroup(src, info);
+          const currentGroupId = draggedLayer.parentGroupId ?? null;
+          if (targetGroupId !== currentGroupId) {
+            if (targetGroupId) layerActions.moveLayerToGroup(draggedLayer.id, targetGroupId);
+            else layerActions.moveLayerOutOfGroup(draggedLayer.id);
+          }
+        }
       }
       justDraggedRef.current = true;
     }
@@ -133,6 +176,7 @@ export function LayerPanel(): JSX.Element {
     dropInfoRef.current = null;
     setDragSrc(null);
     setDropInfo(null);
+    setDropGroupId(null);
   };
 
   const onListPointerCancel = () => {
@@ -140,6 +184,7 @@ export function LayerPanel(): JSX.Element {
     dropInfoRef.current = null;
     setDragSrc(null);
     setDropInfo(null);
+    setDropGroupId(null);
   };
 
   const onDuplicate = () => {
@@ -199,6 +244,16 @@ export function LayerPanel(): JSX.Element {
               <IconPlus />
             </button>
           </Tooltip>
+          <Tooltip content="Add group" placement="left">
+            <button
+              type="button"
+              className={styles.headerButton}
+              aria-label="Add group"
+              onClick={() => layerActions.addGroup()}
+            >
+              <LuFolderPlus size={14} />
+            </button>
+          </Tooltip>
           <Tooltip content="Duplicate layer(s)" placement="left">
             <button
               type="button"
@@ -255,6 +310,7 @@ export function LayerPanel(): JSX.Element {
             draggingDisplayIdx={dragSrc}
             dropDisplayIdx={dropInfo?.idx ?? null}
             dropOnTopHalf={dropInfo?.topHalf ?? false}
+            dropGroupId={dropGroupId}
             onSelect={(e) => handleRowSelect(layer.id, displayIdx, e)}
           />
         ))}

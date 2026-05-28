@@ -1,5 +1,5 @@
 import type { Command } from '../CommandSystem';
-import type { LayerId, RGBA } from '../DataModel';
+import type { LayerId, RGBA, BrushShape } from '../DataModel';
 
 export interface SelectionMask {
   data: Uint8ClampedArray;
@@ -81,6 +81,10 @@ export interface ToolEngineContext {
   getMirrorMode(): { h: boolean; v: boolean };
   /** Sets the lasso tool's in-progress path for SVG overlay rendering. Pass [] to clear. */
   setLassoPreviewPath(path: Array<{ x: number; y: number }>): void;
+  /** Returns the active brush size and shape (pencil/eraser tools). */
+  getBrushOptions(): { size: number; shape: BrushShape };
+  /** If indexed color mode is on, snaps color to nearest palette swatch; otherwise returns color unchanged. */
+  snapColorIfIndexed(color: RGBA): RGBA;
 }
 
 export interface Tool {

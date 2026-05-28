@@ -12,7 +12,7 @@ export class PencilTool extends BrushTool {
   }
 
   protected resolvePaintColor(): RGBA {
-    return this.ctx.getPrimaryColor();
+    return this.ctx.snapColorIfIndexed(this.ctx.getPrimaryColor());
   }
 
   protected describe(count: number): string {

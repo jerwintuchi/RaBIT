@@ -51,6 +51,7 @@ export class RenderingEngine {
   private fboA!: FBOTarget;
   private fboB!: FBOTarget;
   private scratchFBO!: FBOTarget;
+  private groupFBO!: FBOTarget;
   private texCache!: TextureCache;
 
   private canvasW = 1;
@@ -114,7 +115,7 @@ export class RenderingEngine {
     });
     this.compositeProg = this.compileProgram(QUAD_VERT, COMPOSITE_FRAG, {
       attribs: ['a_position'],
-      uniforms: ['u_ndcMin', 'u_ndcMax', 'u_layer', 'u_composite', 'u_opacity', 'u_blendMode', 'u_scratch', 'u_applyErase'],
+      uniforms: ['u_ndcMin', 'u_ndcMax', 'u_layer', 'u_composite', 'u_opacity', 'u_blendMode', 'u_scratch', 'u_applyErase', 'u_flipLayerY'],
     });
     this.blitProg = this.compileProgram(QUAD_VERT, BLIT_FRAG, {
       attribs: ['a_position'],
@@ -151,6 +152,7 @@ export class RenderingEngine {
     this.fboA = this.createFBO(1, 1);
     this.fboB = this.createFBO(1, 1);
     this.scratchFBO = this.createFBO(1, 1);
+    this.groupFBO = this.createFBO(1, 1);
     for (let i = 0; i < RenderingEngine.MAX_ONION; i++) {
       this.onionPrevFBOs.push(this.createFBO(1, 1));
       this.onionNextFBOs.push(this.createFBO(1, 1));
@@ -172,6 +174,7 @@ export class RenderingEngine {
     this.resizeFBO(this.fboA, w, h);
     this.resizeFBO(this.fboB, w, h);
     this.resizeFBO(this.scratchFBO, w, h);
+    this.resizeFBO(this.groupFBO, w, h);
     for (const fbo of [...this.onionPrevFBOs, ...this.onionNextFBOs]) {
       this.resizeFBO(fbo, w, h);
     }
@@ -386,6 +389,7 @@ export class RenderingEngine {
     this.deleteFBO(this.fboA);
     this.deleteFBO(this.fboB);
     this.deleteFBO(this.scratchFBO);
+    this.deleteFBO(this.groupFBO);
     for (const fbo of [...this.onionPrevFBOs, ...this.onionNextFBOs]) {
       this.deleteFBO(fbo);
     }
@@ -514,6 +518,18 @@ export class RenderingEngine {
   private compositeToFBO(): void {
     const { gl, fboA, fboB } = this;
 
+    // Build group membership map — group id → ordered list of visible child specs
+    const groupChildren = new Map<string, typeof this.layers>();
+    const childLayerIds = new Set<string>();
+    for (const layer of this.layers) {
+      if (layer.parentGroupId) {
+        const children = groupChildren.get(layer.parentGroupId) ?? [];
+        children.push(layer);
+        groupChildren.set(layer.parentGroupId, children);
+        childLayerIds.add(layer.id);
+      }
+    }
+
     // Clear fboA (starting composite is transparent)
     gl.bindFramebuffer(gl.FRAMEBUFFER, fboA.fbo);
     gl.viewport(0, 0, this.canvasW, this.canvasH);
@@ -540,7 +556,79 @@ export class RenderingEngine {
     let dst = fboB;
 
     for (const layer of this.layers) {
+      // Children are handled inside their group pass — skip here
+      if (childLayerIds.has(layer.id)) continue;
+
       if (!layer.visible) continue;
+
+      if (layer.isGroup) {
+        // Composite all visible children into groupFBO, then blend groupFBO into main.
+        // Uses dst as the transparent starting accumulator; ping-pongs between dst and groupFBO.
+        // After the child loop, groupSrc holds the result. If it ended up in dst (not groupFBO),
+        // blit it to groupFBO so dst is free for the final main-composite blend.
+        const children = groupChildren.get(layer.id);
+        if (!children || children.length === 0) continue;
+
+        // Clear dst — use it as the transparent starting accumulator for children
+        gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo);
+        gl.viewport(0, 0, this.canvasW, this.canvasH);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        let groupSrc = dst;
+        let groupDst = this.groupFBO;
+        for (const child of children) {
+          if (!child.visible) continue;
+          const childTex = this.texCache.get(child.id);
+          if (!childTex) continue;
+
+          gl.bindFramebuffer(gl.FRAMEBUFFER, groupDst.fbo);
+          gl.viewport(0, 0, this.canvasW, this.canvasH);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, childTex);
+          gl.activeTexture(gl.TEXTURE1);
+          gl.bindTexture(gl.TEXTURE_2D, groupSrc.texture);
+          gl.uniform1f(u(this.compositeProg, 'u_opacity'), child.opacity);
+          gl.uniform1i(u(this.compositeProg, 'u_blendMode'), BLEND_MODE_INDEX[child.blendMode] ?? 0);
+          gl.uniform1i(u(this.compositeProg, 'u_applyErase'),
+            this.scratchActive && this.scratchErase && child.id === this.activeLayerId ? 1 : 0);
+          gl.disable(gl.BLEND);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+          const tmp2 = groupSrc; groupSrc = groupDst; groupDst = tmp2;
+        }
+
+        // Ensure the group result is in groupFBO (may be in dst after even child count)
+        if (groupSrc !== this.groupFBO) {
+          gl.bindFramebuffer(gl.READ_FRAMEBUFFER, groupSrc.fbo);
+          gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.groupFBO.fbo);
+          gl.blitFramebuffer(0, 0, this.canvasW, this.canvasH, 0, 0, this.canvasW, this.canvasH, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+        }
+
+        // Restore scratch binding after child passes
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, this.scratchFBO.texture);
+
+        // Blend groupFBO into main composite (dst is now safe — group result was copied out).
+        // groupFBO is an FBO texture (canvas-top at v=1), so set u_flipLayerY=1.
+        gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fbo);
+        gl.viewport(0, 0, this.canvasW, this.canvasH);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this.groupFBO.texture);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, src.texture);
+        gl.uniform1f(u(this.compositeProg, 'u_opacity'), layer.opacity);
+        gl.uniform1i(u(this.compositeProg, 'u_blendMode'), BLEND_MODE_INDEX[layer.blendMode] ?? 0);
+        gl.uniform1i(u(this.compositeProg, 'u_applyErase'), 0);
+        gl.uniform1i(u(this.compositeProg, 'u_flipLayerY'), 1);
+        gl.disable(gl.BLEND);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        gl.uniform1i(u(this.compositeProg, 'u_flipLayerY'), 0);
+
+        const tmp = src; src = dst; dst = tmp;
+        continue;
+      }
+
       const tex = this.texCache.get(layer.id);
       if (!tex) continue;
 

@@ -1,6 +1,6 @@
 // Color-space conversions used by the color picker. RGBA is the canonical
 // project type (32-bit packed, big-endian); HSV / Hex are picker-side views.
-import type { RGBA } from './types';
+import type { RGBA, Swatch } from './types';
 import { packRGBA, unpackRGBA } from './pixels';
 
 export interface HSV {
@@ -59,6 +59,22 @@ export function rgbaToHex(rgba: RGBA, includeAlpha = true): string {
   const hex = (n: number) => n.toString(16).padStart(2, '0').toUpperCase();
   if (includeAlpha) return `#${hex(r)}${hex(g)}${hex(b)}${hex(a)}`;
   return `#${hex(r)}${hex(g)}${hex(b)}`;
+}
+
+/** Returns the palette swatch color nearest to `color` by Euclidean RGBA distance. */
+export function nearestSwatchColor(color: RGBA, swatches: Swatch[]): RGBA {
+  if (swatches.length === 0) return color;
+  const [r, g, b, a] = unpackRGBA(color);
+  let best = swatches[0]!;
+  const [br, bg, bb, ba] = unpackRGBA(best.color);
+  let bestDist = (r - br) ** 2 + (g - bg) ** 2 + (b - bb) ** 2 + (a - ba) ** 2;
+  for (let i = 1; i < swatches.length; i++) {
+    const sw = swatches[i]!;
+    const [sr, sg, sb, sa] = unpackRGBA(sw.color);
+    const d = (r - sr) ** 2 + (g - sg) ** 2 + (b - sb) ** 2 + (a - sa) ** 2;
+    if (d < bestDist) { best = sw; bestDist = d; }
+  }
+  return best.color;
 }
 
 /**

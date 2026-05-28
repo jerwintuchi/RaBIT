@@ -28,7 +28,7 @@ export class FillTool implements Tool {
     const { width, height } = this.ctx.getCanvasSize();
     if (e.canvasX < 0 || e.canvasY < 0 || e.canvasX >= width || e.canvasY >= height) return;
 
-    const color = this.ctx.getPrimaryColor();
+    const color = this.ctx.snapColorIfIndexed(this.ctx.getPrimaryColor());
     const tolerance = this.ctx.getFillTolerance();
     const selection = this.ctx.getSelection();
     if (selection && !isInSelection(selection, e.canvasX, e.canvasY)) return;

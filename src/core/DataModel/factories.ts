@@ -12,6 +12,7 @@ import type {
   RGBA,
   BlendMode,
   LoopDirection,
+  LayerType,
 } from './types';
 
 export function makeCanvasConfig(
@@ -33,10 +34,27 @@ export function makeLayer(overrides: Partial<Layer> = {}): Layer {
   return {
     id: nanoid(12),
     name: 'Layer',
+    type: 'layer' satisfies LayerType,
+    parentGroupId: null,
     visible: true,
     locked: false,
     opacity: 1.0,
     blendMode: 'normal' satisfies BlendMode,
+    ...overrides,
+  };
+}
+
+export function makeLayerGroup(overrides: Partial<Layer> = {}): Layer {
+  return {
+    id: nanoid(12),
+    name: 'Group',
+    type: 'group' satisfies LayerType,
+    parentGroupId: null,
+    visible: true,
+    locked: false,
+    opacity: 1.0,
+    blendMode: 'normal' satisfies BlendMode,
+    collapsed: false,
     ...overrides,
   };
 }
@@ -66,6 +84,7 @@ export function makeFrame(
     id: nanoid(12),
     duration: 100,
     cells,
+    hiddenLayerIds: [],
     ...overrides,
   };
 }
